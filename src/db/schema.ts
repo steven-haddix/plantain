@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 import {
   check,
+  boolean,
   customType,
   date,
   jsonb,
@@ -118,8 +119,37 @@ export const activityLogs = pgTable("activity_logs", {
     .default(sql`now()`),
 });
 
+export const chatThreads = pgTable("chat_threads", {
+  id: text("id").primaryKey(),
+  tripId: text("trip_id")
+    .notNull()
+    .references(() => trips.id, { onDelete: "cascade" }),
+  userId: text("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  title: text("title"),
+  isPrivate: boolean("is_private").notNull().default(false),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .default(sql`now()`),
+});
+
+export const chatMessages = pgTable("chat_messages", {
+  id: text("id").primaryKey(),
+  threadId: text("thread_id")
+    .notNull()
+    .references(() => chatThreads.id, { onDelete: "cascade" }),
+  role: text("role").notNull(), // 'user' | 'assistant'
+  content: jsonb("content").$type<any[]>(), // AI-SDK message parts
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .default(sql`now()`),
+});
+
 export type User = typeof users.$inferSelect;
 export type Trip = typeof trips.$inferSelect;
 export type Place = typeof places.$inferSelect;
 export type SavedLocation = typeof savedLocations.$inferSelect;
 export type ActivityLog = typeof activityLogs.$inferSelect;
+export type ChatThread = typeof chatThreads.$inferSelect;
+export type ChatMessage = typeof chatMessages.$inferSelect;

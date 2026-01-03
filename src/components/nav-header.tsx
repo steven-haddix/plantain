@@ -42,6 +42,7 @@ export function NavHeader() {
 
             <TripsModal
                 isOpen={isTripsModalOpen}
+                onOpenChange={setIsTripsModalOpen}
                 onSelect={(trip) => {
                     setActiveTrip(trip);
                     setIsTripsModalOpen(false);

@@ -5,8 +5,15 @@ import { useEffect, useMemo } from "react";
 import dynamic from "next/dynamic";
 
 import { authClient } from "@/lib/auth/client";
+import { getTrips } from "@/app/actions/trips";
 import { useAppStore } from "@/lib/store";
 import { TripsModal } from "@/components/trips-modal";
+import { TravelAgent } from "@/components/travel-agent";
+import {
+  ResizableHandle,
+  ResizablePanel,
+  ResizablePanelGroup,
+} from "@/components/ui/resizable";
 
 const LeafletMap = dynamic(() => import("@/components/map"), {
   ssr: false,
@@ -25,6 +32,26 @@ export default function Dashboard() {
     }
   }, [isPending, data, router]);
 
+  useEffect(() => {
+    if (activeTrip && !isPending && data?.session) {
+      getTrips().then((trips) => {
+        const isValid = trips.find((t) => t.id === activeTrip.id);
+        if (!isValid) {
+          setActiveTrip(null);
+        } else {
+          // Check if data actually changed to avoid infinite loop
+          if (
+            isValid.title !== activeTrip.title ||
+            isValid.startDate !== activeTrip.startDate ||
+            isValid.endDate !== activeTrip.endDate
+          ) {
+            setActiveTrip(isValid);
+          }
+        }
+      });
+    }
+  }, [activeTrip, isPending, data, setActiveTrip]);
+
   if (isPending) {
     return (
       <div className="flex min-h-screen items-center justify-center">
@@ -37,8 +64,44 @@ export default function Dashboard() {
 
   return (
     <div className="relative h-[calc(100vh-3.5rem)] w-full overflow-hidden bg-muted/20">
-      {/* Map Background */}
-      <LeafletMap />
+      <ResizablePanelGroup className="h-full w-full">
+        <ResizablePanel defaultSize={70} minSize={30}>
+          <div className="relative h-full w-full">
+            {/* Map Background */}
+            <LeafletMap />
+          </div>
+        </ResizablePanel>
+
+        <ResizableHandle withHandle />
+
+        <ResizablePanel defaultSize={30} minSize={20} className="bg-background">
+          {activeTrip ? (
+            <TravelAgent
+              tripId={activeTrip.id}
+              trip={activeTrip}
+              onTripChange={() => {
+                // We might need to refresh trip data here
+                // For now, let's assume the agent updates it and we just need a signal
+                console.log("Trip updated by agent");
+              }}
+            />
+          ) : (
+            <div className="flex h-full items-center justify-center p-6 text-center text-muted-foreground">
+              <p>Select a trip to start chatting with your Travel Agent.</p>
+              <TripsModal
+                isOpen={true}
+                onOpenChange={(open) => {
+                  if (!open && !activeTrip) {
+                    // Prevent closing if no active trip
+                    return;
+                  }
+                }}
+                onSelect={setActiveTrip}
+              />
+            </div>
+          )}
+        </ResizablePanel>
+      </ResizablePanelGroup>
     </div>
   );
 }

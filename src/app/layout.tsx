@@ -18,8 +18,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Flexi — AI Workout Companion",
-  description: "Gym scanner and personalized workout generator",
+  title: "Plantain — AI Travel Companion",
+  description: "Plan and manage your trips with an expert AI travel agent",
 };
 
 import { UserSync } from "@/components/user-sync";
