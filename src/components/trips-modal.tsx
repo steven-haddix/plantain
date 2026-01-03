@@ -27,7 +27,7 @@ export function TripsModal({
     onSelect,
 }: {
     isOpen: boolean;
-    onSelect: (tripId: string) => void;
+    onSelect: (trip: Trip) => void;
 }) {
     const [trips, setTrips] = useState<Trip[]>([]);
     const [loading, setLoading] = useState(true);
@@ -60,7 +60,7 @@ export function TripsModal({
             setIsCreating(true);
             const newTrip = await createTrip(newTripName);
             toast.success("Trip created successfully!");
-            onSelect(newTrip.id);
+            onSelect(newTrip);
         } catch (error) {
             toast.error("Failed to create trip");
         } finally {
@@ -118,7 +118,7 @@ export function TripsModal({
                                             <Button
                                                 variant="ghost"
                                                 className="w-full justify-between hover:bg-white/5 border border-transparent hover:border-white/10 group h-auto py-3"
-                                                onClick={() => onSelect(trip.id)}
+                                                onClick={() => onSelect(trip)}
                                             >
                                                 <div className="flex flex-col items-start gap-1">
                                                     <span className="font-semibold text-foreground group-hover:text-primary transition-colors">

@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import "leaflet/dist/leaflet.css";
 import "./globals.css";
 import { NeonAuthUIProvider } from "@neondatabase/neon-js/auth/react/ui";
 import { NavHeader } from "@/components/nav-header";

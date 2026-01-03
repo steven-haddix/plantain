@@ -1,16 +1,23 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 
+interface Trip {
+  id: string;
+  title: string | null;
+  startDate: string | null;
+  endDate: string | null;
+}
+
 interface AppState {
-  activeTripId: string | null;
-  setActiveTripId: (id: string | null) => void;
+  activeTrip: Trip | null;
+  setActiveTrip: (trip: Trip | null) => void;
 }
 
 export const useAppStore = create<AppState>()(
   persist(
     (set) => ({
-      activeTripId: null,
-      setActiveTripId: (id) => set({ activeTripId: id }),
+      activeTrip: null,
+      setActiveTrip: (trip) => set({ activeTrip: trip }),
     }),
     {
       name: "plantain-storage",
