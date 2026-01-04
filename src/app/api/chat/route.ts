@@ -6,7 +6,7 @@ import {
     ToolLoopAgent,
     tool,
 } from "ai";
-import { and, desc, eq, isNull, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { z } from "zod";
 import { db } from "@/db";
@@ -87,7 +87,9 @@ export async function POST(req: Request) {
             savedLocationsResult.length > 0
                 ? savedLocationsResult
                     .map((loc) => {
-                        const name = (loc.placeName as any)?.name || "Unknown Place";
+                        const name =
+                            (loc.placeName as { name?: string } | null)?.name ||
+                            "Unknown Place";
                         const note = loc.note ? `\nNote: ${loc.note}` : "";
                         return `- [ID: ${loc.id}] ${name} (${loc.status})${note}`;
                     })
@@ -166,6 +168,7 @@ Professional, enthusiastic, helpful, and concise.
                         return {
                             places: results.map((p) => ({
                                 id: p.googlePlaceId,
+                                googlePlaceId: p.googlePlaceId,
                                 name: p.name,
                                 address: p.address,
                                 rating: p.rating,
@@ -173,6 +176,7 @@ Professional, enthusiastic, helpful, and concise.
                                 category: p.category,
                                 latitude: p.latitude,
                                 longitude: p.longitude,
+                                imageUrl: p.photos?.[0]?.url,
                             })),
                         };
                     },
@@ -245,7 +249,9 @@ Professional, enthusiastic, helpful, and concise.
                 updateSavedLocation: tool({
                     description: "Update a saved location's note or status.",
                     inputSchema: z.object({
-                        id: z.string().describe("The ID of the saved location (from context)"),
+                        id: z
+                            .string()
+                            .describe("The ID of the saved location (from context)"),
                         note: z.string().optional(),
                         status: z.enum(["interested", "visited"]).optional(),
                     }),
@@ -253,19 +259,31 @@ Professional, enthusiastic, helpful, and concise.
                         await db
                             .update(savedLocations)
                             .set(updates)
-                            .where(and(eq(savedLocations.id, id), eq(savedLocations.tripId, trip.id)));
+                            .where(
+                                and(
+                                    eq(savedLocations.id, id),
+                                    eq(savedLocations.tripId, trip.id),
+                                ),
+                            );
                         return { output: "Location updated." };
                     },
                 }),
                 deleteSavedLocation: tool({
                     description: "Remove a location from the trip's saved list.",
                     inputSchema: z.object({
-                        id: z.string().describe("The ID of the saved location (from context)"),
+                        id: z
+                            .string()
+                            .describe("The ID of the saved location (from context)"),
                     }),
                     execute: async ({ id }) => {
                         await db
                             .delete(savedLocations)
-                            .where(and(eq(savedLocations.id, id), eq(savedLocations.tripId, trip.id)));
+                            .where(
+                                and(
+                                    eq(savedLocations.id, id),
+                                    eq(savedLocations.tripId, trip.id),
+                                ),
+                            );
                         return { output: "Location removed." };
                     },
                 }),
@@ -289,13 +307,13 @@ Professional, enthusiastic, helpful, and concise.
                             id: nanoid(),
                             threadId: threadId,
                             role: lastUserMessage.role,
-                            content: lastUserMessage.parts as any,
+                            content: lastUserMessage.parts as unknown[],
                         },
                         ...assistantMessages.map((m) => ({
                             id: nanoid(),
                             threadId: threadId,
                             role: m.role,
-                            content: m.parts as any,
+                            content: m.parts as unknown[],
                         })),
                     ];
 

@@ -1,19 +1,19 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-import { useEffect, useMemo } from "react";
 import dynamic from "next/dynamic";
-
-import { authClient } from "@/lib/auth/client";
+import { useRouter } from "next/navigation";
+import { useEffect } from "react";
 import { getTrips } from "@/app/actions/trips";
-import { useAppStore } from "@/lib/store";
-import { TripsModal } from "@/components/trips-modal";
+import { PlaceDetailsPanel } from "@/components/place-details-panel";
 import { TravelAgent } from "@/components/travel-agent";
+import { TripsModal } from "@/components/trips-modal";
 import {
   ResizableHandle,
   ResizablePanel,
   ResizablePanelGroup,
 } from "@/components/ui/resizable";
+import { authClient } from "@/lib/auth/client";
+import { useAppStore } from "@/lib/store";
 
 const LeafletMap = dynamic(() => import("@/components/map"), {
   ssr: false,
@@ -69,6 +69,7 @@ export default function Dashboard() {
           <div className="relative h-full w-full">
             {/* Map Background */}
             <LeafletMap />
+            <PlaceDetailsPanel />
           </div>
         </ResizablePanel>
 

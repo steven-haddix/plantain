@@ -1,16 +1,20 @@
 "use client";
 
-import { useAppStore } from "@/lib/store";
-
 import { useChat } from "@ai-sdk/react";
 import {
     DefaultChatTransport,
+    isTextUIPart,
     type ToolUIPart,
+    type UIDataTypes,
+    type UIMessage,
     type UIMessagePart,
+    type UITools,
 } from "ai";
+import { Calendar, MapPin, Pin, Plane, Sparkles, Trash2 } from "lucide-react";
+import { useRouter, useSearchParams } from "next/navigation";
 import posthog from "posthog-js";
-import { Plane, Sparkles, MapPin, Calendar, Tent } from "lucide-react";
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
+import { mutate } from "swr";
 import {
     Conversation,
     ConversationContent,
@@ -39,22 +43,182 @@ import {
     ToolOutput,
 } from "@/components/ai-elements/tool";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { type MapPlace, useMapStore } from "@/lib/map-store";
+import { fetchPlaceDetails, placeDetailsUrl } from "@/lib/place-details";
+import { useAppStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
+
+type TripLike = {
+    id: string;
+    title?: string | null;
+    startDate?: string | null;
+    endDate?: string | null;
+    chatMessages?: UIMessage[];
+};
 
 interface TravelAgentProps {
     tripId: string;
-    trip: any;
+    trip: TripLike;
     onTripChange?: () => void;
 }
 
-export function TravelAgent({
-    tripId,
-    trip,
-    onTripChange,
-}: TravelAgentProps) {
+type SearchPlaceResult = MapPlace & { id?: string };
+
+type SearchPlacesToolOutput = {
+    places: SearchPlaceResult[];
+};
+
+function SearchPlacesToolCard({
+    toolKey,
+    places,
+}: {
+    toolKey: string;
+    places: SearchPlaceResult[];
+}) {
+    const router = useRouter();
+    const searchParams = useSearchParams();
+    const applySearchResults = useMapStore((state) => state.applySearchResults);
+    const pinActiveResearch = useMapStore((state) => state.pinActiveResearch);
+    const clearResearch = useMapStore((state) => state.clearResearch);
+    const selectPlace = useMapStore((state) => state.selectPlace);
+
+    const normalizedPlaces = useMemo(
+        () =>
+            places.map((place, index) => ({
+                ...place,
+                googlePlaceId:
+                    place.googlePlaceId || place.id || `place-${toolKey}-${index}`,
+            })),
+        [places, toolKey],
+    );
+
+    const didPrefetchRef = useRef(false);
+
+    useEffect(() => {
+        applySearchResults({
+            toolKey,
+            title: `Search results (${normalizedPlaces.length})`,
+            places: normalizedPlaces,
+        });
+    }, [applySearchResults, toolKey, normalizedPlaces]);
+
+    useEffect(() => {
+        if (didPrefetchRef.current) return;
+        didPrefetchRef.current = true;
+
+        const idsToPrefetch = normalizedPlaces
+            .map((place) => place.googlePlaceId)
+            .filter((id) => Boolean(id) && !id.startsWith("place-"))
+            .slice(0, 10);
+
+        const concurrency = 3;
+        const queue = [...idsToPrefetch];
+
+        const worker = async () => {
+            while (queue.length > 0) {
+                const id = queue.shift();
+                if (!id) continue;
+
+                const url = placeDetailsUrl(id);
+                try {
+                    await mutate(url, fetchPlaceDetails(url), {
+                        populateCache: true,
+                        revalidate: false,
+                    });
+                } catch {
+                    // Best-effort prefetch; details panel will retry on demand.
+                }
+            }
+        };
+
+        for (let i = 0; i < Math.min(concurrency, queue.length); i++) {
+            void worker();
+        }
+    }, [normalizedPlaces]);
+
+    return (
+        <div className="space-y-4 py-2">
+            <div className="flex items-center justify-between px-1">
+                <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/70">
+                    Search Results
+                </div>
+                <div className="flex items-center gap-1">
+                    <Button
+                        size="icon"
+                        variant="ghost"
+                        className="size-8 text-muted-foreground hover:text-foreground"
+                        onClick={pinActiveResearch}
+                        title="Pin to map"
+                    >
+                        <Pin className="size-4" />
+                    </Button>
+                    <Button
+                        size="icon"
+                        variant="ghost"
+                        className="size-8 text-muted-foreground hover:text-destructive"
+                        onClick={clearResearch}
+                        title="Clear results"
+                    >
+                        <Trash2 className="size-4" />
+                    </Button>
+                </div>
+            </div>
+            <div className="grid gap-2">
+                {normalizedPlaces.slice(0, 8).map((place, index) => (
+                    <button
+                        key={`${place.googlePlaceId ?? "place"}-${index}`}
+                        className="group flex items-start gap-3 rounded-xl border bg-card p-2 text-left transition-colors hover:bg-accent/50"
+                        onClick={() => {
+                            selectPlace(place.googlePlaceId);
+                            const next = new URLSearchParams(searchParams.toString());
+                            next.set("place", place.googlePlaceId);
+                            router.replace(`/dashboard?${next.toString()}`);
+                        }}
+                    >
+                        <div className="relative size-16 shrink-0 overflow-hidden rounded-lg bg-muted">
+                            {place.imageUrl ? (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img
+                                    src={place.imageUrl}
+                                    alt={place.name}
+                                    className="size-full object-cover transition-transform group-hover:scale-110"
+                                />
+                            ) : (
+                                <div className="flex size-full items-center justify-center">
+                                    <MapPin className="size-6 text-muted-foreground/40" />
+                                </div>
+                            )}
+                        </div>
+                        <div className="flex min-w-0 flex-col py-0.5">
+                            <span className="truncate text-sm font-semibold text-foreground">
+                                {place.name}
+                            </span>
+                            <span className="line-clamp-2 text-xs text-muted-foreground">
+                                {place.address}
+                            </span>
+                            {place.rating && (
+                                <div className="mt-1 flex items-center gap-1 text-[10px] font-medium text-amber-600">
+                                    <span>★</span>
+                                    <span>{place.rating}</span>
+                                    {place.reviewsCount && (
+                                        <span className="text-muted-foreground/60">
+                                            ({place.reviewsCount})
+                                        </span>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                    </button>
+                ))}
+            </div>
+        </div>
+    );
+}
+
+export function TravelAgent({ tripId, trip, onTripChange }: TravelAgentProps) {
     const transport = useMemo(
         () =>
             new DefaultChatTransport({
@@ -70,15 +234,18 @@ export function TravelAgent({
         transport,
         onError: (error) => {
             console.error("Chat error:", error);
-            if (error.message.includes("404") || error.message.toLowerCase().includes("not found")) {
+            if (
+                error.message.includes("404") ||
+                error.message.toLowerCase().includes("not found")
+            ) {
                 useAppStore.getState().setActiveTrip(null);
             }
         },
         onFinish: ({ message }) => {
             const textContent = message.parts
                 ? message.parts
-                    .filter((part) => part.type === "text")
-                    .map((part) => (part as any).text || "")
+                    .filter(isTextUIPart)
+                    .map((part) => part.text || "")
                     .join("")
                 : "";
 
@@ -88,14 +255,15 @@ export function TravelAgent({
                 has_tools: message.parts?.some((p) => p.type.startsWith("tool-")),
             });
 
-            const toolUsed = message.parts?.find((part) =>
-                part.type.startsWith("tool-") &&
-                [
-                    "tool-updateTripDetails",
-                    "tool-createSavedLocation",
-                    "tool-updateSavedLocation",
-                    "tool-deleteSavedLocation"
-                ].includes(part.type)
+            const toolUsed = message.parts?.find(
+                (part) =>
+                    part.type.startsWith("tool-") &&
+                    [
+                        "tool-updateTripDetails",
+                        "tool-createSavedLocation",
+                        "tool-updateSavedLocation",
+                        "tool-deleteSavedLocation",
+                    ].includes(part.type),
             );
 
             if (toolUsed) {
@@ -170,7 +338,7 @@ export function TravelAgent({
     };
 
     const renderPart = (
-        part: UIMessagePart<any, any>,
+        part: UIMessagePart<UIDataTypes, UITools>,
         index: number,
         messageId: string,
     ) => {
@@ -180,8 +348,23 @@ export function TravelAgent({
             return <MessageResponse key={key}>{part.text}</MessageResponse>;
         }
 
-        if (part.type.startsWith("tool-")) {
+        if (part.type === "tool-searchPlaces") {
             const toolPart = part as ToolUIPart;
+            const toolKey = `${messageId}:${index}`;
+            const output = toolPart.output as SearchPlacesToolOutput | undefined;
+            const places = output?.places;
+
+            if (!places?.length) return null;
+
+            return (
+                <div key={key} className="pt-2">
+                    <SearchPlacesToolCard toolKey={toolKey} places={places} />
+                </div>
+            );
+        }
+
+        if (part.type.startsWith("tool-")) {
+            const toolPart = part as ToolUIPart<UITools>;
             const outputNode =
                 toolPart.state === "output-available" && toolPart.output ? (
                     typeof toolPart.output === "string" ? (
@@ -224,7 +407,10 @@ export function TravelAgent({
                                 {trip?.title ?? "Current Trip"}
                             </span>
                             {trip?.startDate && (
-                                <Badge variant="secondary" className="border-muted-foreground/20">
+                                <Badge
+                                    variant="secondary"
+                                    className="border-muted-foreground/20"
+                                >
                                     <Calendar className="mr-1 size-3" />
                                     {new Date(trip.startDate).toLocaleDateString()}
                                 </Badge>
