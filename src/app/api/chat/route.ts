@@ -6,16 +6,22 @@ import {
     ToolLoopAgent,
     tool,
 } from "ai";
-import { eq, desc, and, isNull } from "drizzle-orm";
+import { and, desc, eq, isNull } from "drizzle-orm";
+import { nanoid } from "nanoid";
 import { z } from "zod";
 import { db } from "@/db";
-import { trips, savedLocations, places, chatThreads, chatMessages } from "@/db/schema";
-import { nanoid } from "nanoid";
-
+import {
+    chatMessages,
+    chatThreads,
+    places,
+    savedLocations,
+    trips,
+} from "@/db/schema";
+import { placesService } from "@/lib/places-search/service";
+import { webSearchService } from "@/lib/web-search/service";
 
 export const maxDuration = 60;
 // Force rebuild: 2026-01-03
-
 
 export async function POST(req: Request) {
     const { user } = await neonAuth();
@@ -129,14 +135,66 @@ Professional, enthusiastic, helpful, and concise.
                         endDate: z.string().optional().describe("ISO date string"),
                     }),
                     execute: async (updates) => {
-                        await db
-                            .update(trips)
-                            .set(updates)
-                            .where(eq(trips.id, trip.id));
+                        await db.update(trips).set(updates).where(eq(trips.id, trip.id));
                         return { output: "Trip updated successfully." };
                     },
                 }),
-                // Add more tools as needed, e.g., searchPlaces, addLocation
+                searchPlaces: tool({
+                    description:
+                        "Search for places (restaurants, hotels, attractions, etc.)",
+                    inputSchema: z.object({
+                        query: z
+                            .string()
+                            .describe("The search query (e.g., 'best Italian restaurants')"),
+                        location: z
+                            .string()
+                            .optional()
+                            .describe("The location to search in (e.g., 'Brooklyn, NY')"),
+                        limit: z
+                            .number()
+                            .optional()
+                            .default(10)
+                            .describe("Maximum number of results to return"),
+                    }),
+                    execute: async ({ query, location, limit }) => {
+                        const results = await placesService.searchPlaces(
+                            query,
+                            location,
+                            limit,
+                        );
+                        return {
+                            places: results.map((p) => ({
+                                id: p.googlePlaceId,
+                                name: p.name,
+                                address: p.address,
+                                rating: p.rating,
+                                reviewsCount: p.reviewsCount,
+                                category: p.category,
+                                latitude: p.latitude,
+                                longitude: p.longitude,
+                            })),
+                        };
+                    },
+                }),
+                webSearch: tool({
+                    description:
+                        "Search the web for general information, travel tips, or news.",
+                    inputSchema: z.object({
+                        query: z.string().describe("The search query"),
+                    }),
+                    execute: async ({ query }) => {
+                        const results = await webSearchService.search(query);
+                        // Flatten and simplify the results for the LLM
+                        const organicResults = results.flatMap((r) =>
+                            r.organicResults.map((o) => ({
+                                title: o.title,
+                                link: o.link,
+                                description: o.description,
+                            })),
+                        );
+                        return { results: organicResults.slice(0, 5) };
+                    },
+                }),
             },
         });
 
@@ -149,17 +207,6 @@ Professional, enthusiastic, helpful, and concise.
             }),
             onFinish: async ({ messages: responseMessages }) => {
                 try {
-                    // Save all new messages to the database
-                    // For simplicity, we store the entire content array which matches AI-SDK's expectations
-                    const allMessages = [...messages, ...responseMessages];
-
-                    // We only need to save the new messages from this turn
-                    // But to keep it simple and consistent with previous implementation:
-                    // we'll actually just save the latest exchange or clear and re-save.
-                    // Actually, a better way is to only insert the NEW ones.
-
-                    // Filter for messages that haven't been saved yet (rough check by ID if available, or just the last few)
-                    // For now, let's just save the assistant's response and the user's last message
                     const lastUserMessage = messages[messages.length - 1];
                     const assistantMessages = responseMessages;
 
@@ -170,16 +217,15 @@ Professional, enthusiastic, helpful, and concise.
                             role: lastUserMessage.role,
                             content: lastUserMessage.parts as any,
                         },
-                        ...assistantMessages.map(m => ({
+                        ...assistantMessages.map((m) => ({
                             id: nanoid(),
                             threadId: threadId,
                             role: m.role,
                             content: m.parts as any,
-                        }))
+                        })),
                     ];
 
                     await db.insert(chatMessages).values(messagesToSave);
-
                 } catch (error) {
                     console.error("Failed to save chat messages:", error);
                 }
