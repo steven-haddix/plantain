@@ -6,11 +6,14 @@ interface Trip {
   title: string | null;
   startDate: string | null;
   endDate: string | null;
+  chatMessages?: any[];
+  hasMoreMessages?: boolean;
 }
 
 interface AppState {
   activeTrip: Trip | null;
   setActiveTrip: (trip: Trip | null) => void;
+  prependMessages: (tripId: string, messages: any[], hasMore: boolean) => void;
 }
 
 export const useAppStore = create<AppState>()(
@@ -18,6 +21,17 @@ export const useAppStore = create<AppState>()(
     (set) => ({
       activeTrip: null,
       setActiveTrip: (trip) => set({ activeTrip: trip }),
+      prependMessages: (tripId, messages, hasMore) =>
+        set((state) => {
+          if (state.activeTrip?.id !== tripId) return state;
+          return {
+            activeTrip: {
+              ...state.activeTrip,
+              chatMessages: [...messages, ...(state.activeTrip.chatMessages || [])],
+              hasMoreMessages: hasMore,
+            },
+          };
+        }),
     }),
     {
       name: "plantain-storage",

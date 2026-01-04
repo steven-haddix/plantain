@@ -2,10 +2,11 @@
 
 import { neonAuth } from "@neondatabase/auth/next/server";
 import { db } from "@/db";
-import { trips } from "@/db/schema";
-import { eq, and } from "drizzle-orm";
+import { trips, chatThreads, chatMessages } from "@/db/schema";
+import { eq, and, desc, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { nanoid } from "nanoid";
+import { CHAT_HISTORY_LIMIT } from "@/lib/constants";
 
 export async function getTrips() {
     const { user } = await neonAuth();
@@ -57,4 +58,44 @@ export async function updateTrip(id: string, updates: { title?: string; startDat
 
     revalidatePath("/dashboard");
     return updatedTrip;
+}
+
+export async function getChatMessages(tripId: string, limit: number = CHAT_HISTORY_LIMIT, cursor?: string) {
+    const { user } = await neonAuth();
+    if (!user) throw new Error("Unauthorized");
+
+    // Fetch the thread first to ensure it belongs to the user
+    const [thread] = await db
+        .select()
+        .from(chatThreads)
+        .where(and(eq(chatThreads.tripId, tripId), eq(chatThreads.userId, user.id)));
+
+    if (!thread) return { messages: [], hasMore: false };
+
+    // Fetch messages for this thread
+    const conditions = [eq(chatMessages.threadId, thread.id)];
+    if (cursor) {
+        conditions.push(sql`${chatMessages.createdAt} < ${new Date(cursor).toISOString()}`);
+    }
+
+    const messages = await db
+        .select()
+        .from(chatMessages)
+        .where(and(...conditions))
+        .orderBy(desc(chatMessages.createdAt))
+        .limit(limit + 1);
+
+    const hasMore = messages.length > limit;
+    const resultMessages = hasMore ? messages.slice(0, limit) : messages;
+
+    // Return in reverse order (oldest first) for the UI
+    return {
+        messages: resultMessages.reverse().map((m) => ({
+            id: m.id,
+            role: m.role,
+            parts: m.content as any[],
+            createdAt: m.createdAt.toISOString(),
+        })),
+        hasMore,
+    };
 }

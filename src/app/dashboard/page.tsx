@@ -3,7 +3,7 @@
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
-import { getTrips } from "@/app/actions/trips";
+import { getTrips, getChatMessages } from "@/app/actions/trips";
 import { PlaceDetailsPanel } from "@/components/place-details-panel";
 import { TravelAgent } from "@/components/travel-agent";
 import { TripsModal } from "@/components/trips-modal";
@@ -33,24 +33,41 @@ export default function Dashboard() {
   }, [isPending, data, router]);
 
   useEffect(() => {
-    if (activeTrip && !isPending && data?.session) {
-      getTrips().then((trips) => {
-        const isValid = trips.find((t) => t.id === activeTrip.id);
-        if (!isValid) {
-          setActiveTrip(null);
-        } else {
-          // Check if data actually changed to avoid infinite loop
-          if (
-            isValid.title !== activeTrip.title ||
-            isValid.startDate !== activeTrip.startDate ||
-            isValid.endDate !== activeTrip.endDate
-          ) {
-            setActiveTrip(isValid);
+    const tripId = activeTrip?.id;
+    if (tripId && !isPending && data?.session) {
+      Promise.all([getTrips(), getChatMessages(tripId)]).then(
+        ([trips, chatData]) => {
+          const chatDataObj = chatData as any;
+          const messages = Array.isArray(chatDataObj) ? chatDataObj : (chatDataObj?.messages || []);
+          const hasMore = Array.isArray(chatDataObj) ? false : !!chatDataObj?.hasMore;
+
+          const freshTrip = (trips as any[]).find((t) => t.id === tripId);
+          if (!freshTrip) {
+            setActiveTrip(null);
+          } else {
+            // Check if data actually changed to avoid unnecessary updates
+            const hasChanged =
+              freshTrip.title !== activeTrip?.title ||
+              freshTrip.startDate !== activeTrip?.startDate ||
+              freshTrip.endDate !== activeTrip?.endDate ||
+              JSON.stringify(messages) !== JSON.stringify(activeTrip?.chatMessages) ||
+              hasMore !== activeTrip?.hasMoreMessages;
+
+            if (hasChanged) {
+              setActiveTrip({
+                ...freshTrip,
+                chatMessages: messages,
+                hasMoreMessages: hasMore,
+              });
+            }
           }
-        }
+        },
+      ).catch(err => {
+        console.error("Failed to sync trip data:", err);
       });
     }
-  }, [activeTrip, isPending, data, setActiveTrip]);
+    // Only run on trip change or session load
+  }, [activeTrip?.id, isPending, data?.user?.id, setActiveTrip]);
 
   if (isPending) {
     return (
