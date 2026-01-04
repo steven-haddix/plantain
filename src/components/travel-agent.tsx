@@ -16,7 +16,7 @@ import posthog from "posthog-js";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { mutate } from "swr";
 import type { StickToBottomContext } from "use-stick-to-bottom";
-import { getChatMessages } from "@/app/actions/trips";
+import { clearChatHistory, getChatMessages } from "@/app/actions/trips";
 import {
     Conversation,
     ConversationContent,
@@ -375,6 +375,7 @@ export function TravelAgent({ tripId, trip, onTripChange }: TravelAgentProps) {
     const messagesRef = useRef<UIMessage[]>(messages);
     const hasMoreRef = useRef(Boolean(trip?.hasMoreMessages));
     const prependMessages = useAppStore((state) => state.prependMessages);
+    const clearMessagesStore = useAppStore((state) => state.clearMessages);
     const sentinelRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
@@ -449,6 +450,22 @@ export function TravelAgent({ tripId, trip, onTripChange }: TravelAgentProps) {
     const handleSuggestion = async (suggestion: string) => {
         if (!canSend) return;
         await submitMessage({ text: suggestion });
+    };
+
+    const handleClearHistory = async () => {
+        if (!confirm("Are you sure you want to clear your chat history?")) return;
+
+        try {
+            await clearChatHistory(tripId);
+            setMessages([]);
+            clearMessagesStore(tripId);
+            posthog.capture("travel_chat_history_cleared", {
+                trip_id: tripId,
+            });
+        } catch (error) {
+            console.error("Failed to clear chat history:", error);
+            alert("Failed to clear chat history. Please try again.");
+        }
     };
 
     const renderPart = (
@@ -539,6 +556,16 @@ export function TravelAgent({ tripId, trip, onTripChange }: TravelAgentProps) {
                         </div>
                     </div>
                 </div>
+                <Button
+                    size="icon"
+                    variant="ghost"
+                    className="size-8 text-muted-foreground hover:text-destructive"
+                    onClick={handleClearHistory}
+                    title="Clear history"
+                    disabled={messages.length === 0}
+                >
+                    <Trash2 className="size-4" />
+                </Button>
             </div>
 
             <Conversation className="flex-1" contextRef={stickToBottomRef}>

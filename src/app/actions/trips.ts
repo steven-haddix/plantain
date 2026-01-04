@@ -99,3 +99,20 @@ export async function getChatMessages(tripId: string, limit: number = CHAT_HISTO
         hasMore,
     };
 }
+export async function clearChatHistory(tripId: string) {
+    const { user } = await neonAuth();
+    if (!user) throw new Error("Unauthorized");
+
+    // Fetch the thread first to ensure it belongs to the user
+    const [thread] = await db
+        .select()
+        .from(chatThreads)
+        .where(and(eq(chatThreads.tripId, tripId), eq(chatThreads.userId, user.id)));
+
+    if (!thread) return;
+
+    // Delete all messages for this thread
+    await db.delete(chatMessages).where(eq(chatMessages.threadId, thread.id));
+
+    revalidatePath("/dashboard");
+}
