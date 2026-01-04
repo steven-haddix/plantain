@@ -6,7 +6,7 @@ import {
     ToolLoopAgent,
     tool,
 } from "ai";
-import { and, desc, eq, isNull } from "drizzle-orm";
+import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { z } from "zod";
 import { db } from "@/db";
@@ -74,6 +74,7 @@ export async function POST(req: Request) {
         // Fetch saved locations context
         const savedLocationsResult = await db
             .select({
+                id: savedLocations.id,
                 status: savedLocations.status,
                 note: savedLocations.note,
                 placeName: places.details,
@@ -88,7 +89,7 @@ export async function POST(req: Request) {
                     .map((loc) => {
                         const name = (loc.placeName as any)?.name || "Unknown Place";
                         const note = loc.note ? `\nNote: ${loc.note}` : "";
-                        return `- ${name} (${loc.status})${note}`;
+                        return `- [ID: ${loc.id}] ${name} (${loc.status})${note}`;
                     })
                     .join("\n")
                 : "No locations saved yet.";
@@ -108,7 +109,7 @@ Help the user with their travel planning. You can:
 1. Suggest interesting places to visit based on their trip.
 2. Help organize their itinerary.
 3. Update trip details (like the title or dates) if they ask.
-4. Add new locations to their saved list (simulated via tools).
+4. Manage saved locations: add new ones from search results, update notes/status of existing ones, or remove them.
 
 **Tone:**
 Professional, enthusiastic, helpful, and concise.
@@ -193,6 +194,79 @@ Professional, enthusiastic, helpful, and concise.
                             })),
                         );
                         return { results: organicResults.slice(0, 5) };
+                    },
+                }),
+                createSavedLocation: tool({
+                    description: "Add a location to the trip's saved list.",
+                    inputSchema: z.object({
+                        googlePlaceId: z.string(),
+                        name: z.string(),
+                        latitude: z.number(),
+                        longitude: z.number(),
+                        address: z.string().optional(),
+                        note: z.string().optional(),
+                        status: z.enum(["interested", "visited"]).default("interested"),
+                    }),
+                    execute: async (input) => {
+                        // 1. Upsert place
+                        let [place] = await db
+                            .select()
+                            .from(places)
+                            .where(eq(places.googlePlaceId, input.googlePlaceId));
+
+                        if (!place) {
+                            const placeId = nanoid();
+                            [place] = await db
+                                .insert(places)
+                                .values({
+                                    id: placeId,
+                                    googlePlaceId: input.googlePlaceId,
+                                    location: sql`ST_SetSRID(ST_MakePoint(${input.longitude}, ${input.latitude}), 4326)::geography`,
+                                    details: {
+                                        name: input.name,
+                                        formatted_address: input.address,
+                                    },
+                                })
+                                .returning();
+                        }
+
+                        // 2. Add to saved locations
+                        await db.insert(savedLocations).values({
+                            id: nanoid(),
+                            tripId: trip.id,
+                            placeId: place.id,
+                            status: input.status,
+                            note: input.note,
+                        });
+
+                        return { output: `Saved ${input.name} to your trip.` };
+                    },
+                }),
+                updateSavedLocation: tool({
+                    description: "Update a saved location's note or status.",
+                    inputSchema: z.object({
+                        id: z.string().describe("The ID of the saved location (from context)"),
+                        note: z.string().optional(),
+                        status: z.enum(["interested", "visited"]).optional(),
+                    }),
+                    execute: async ({ id, ...updates }) => {
+                        await db
+                            .update(savedLocations)
+                            .set(updates)
+                            .where(and(eq(savedLocations.id, id), eq(savedLocations.tripId, trip.id)));
+                        return { output: "Location updated." };
+                    },
+                }),
+                deleteSavedLocation: tool({
+                    description: "Remove a location from the trip's saved list.",
+                    inputSchema: z.object({
+                        id: z.string().describe("The ID of the saved location (from context)"),
+                    }),
+                    execute: async ({ id }) => {
+                        await db
+                            .delete(savedLocations)
+                            .where(and(eq(savedLocations.id, id), eq(savedLocations.tripId, trip.id)));
+                        return { output: "Location removed." };
                     },
                 }),
             },

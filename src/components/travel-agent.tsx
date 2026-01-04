@@ -88,14 +88,20 @@ export function TravelAgent({
                 has_tools: message.parts?.some((p) => p.type.startsWith("tool-")),
             });
 
-            if (
-                message.parts?.some(
-                    (part) => part.type === "tool-updateTripDetails",
-                )
-            ) {
+            const toolUsed = message.parts?.find((part) =>
+                part.type.startsWith("tool-") &&
+                [
+                    "tool-updateTripDetails",
+                    "tool-createSavedLocation",
+                    "tool-updateSavedLocation",
+                    "tool-deleteSavedLocation"
+                ].includes(part.type)
+            );
+
+            if (toolUsed) {
                 posthog.capture("travel_chat_tool_used", {
                     trip_id: tripId,
-                    tool_name: "updateTripDetails",
+                    tool_name: toolUsed.type.replace("tool-", ""),
                 });
                 onTripChange?.();
             }
