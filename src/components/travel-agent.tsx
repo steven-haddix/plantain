@@ -309,6 +309,9 @@ export function TravelAgent({ tripId, trip, onTripChange }: TravelAgentProps) {
                         "tool-createSavedLocation",
                         "tool-updateSavedLocation",
                         "tool-deleteSavedLocation",
+                        "tool-createItineraryEvent",
+                        "tool-updateItineraryEvent",
+                        "tool-deleteItineraryEvent",
                     ].includes(part.type),
             );
 
@@ -513,8 +516,8 @@ export function TravelAgent({ tripId, trip, onTripChange }: TravelAgentProps) {
                 ) : null;
 
             return (
-                <div key={key} className="pt-2">
-                    <Tool defaultOpen={false}>
+                <div key={key}>
+                    <Tool defaultOpen={false} className="mb-0">
                         <ToolHeader type={toolPart.type} state={toolPart.state} />
                         <ToolContent>
                             {toolPart.input ? <ToolInput input={toolPart.input} /> : null}

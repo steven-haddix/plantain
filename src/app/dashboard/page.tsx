@@ -3,10 +3,12 @@
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
+import { mutate } from "swr";
 import { getTrips, getChatMessages } from "@/app/actions/trips";
 import { PlaceDetailsPanel } from "@/components/place-details-panel";
 import { TravelAgent } from "@/components/travel-agent";
 import { TripsModal } from "@/components/trips-modal";
+import { ItineraryRail } from "@/components/itinerary/itinerary-rail";
 import {
   ResizableHandle,
   ResizablePanel,
@@ -87,6 +89,13 @@ export default function Dashboard() {
             {/* Map Background */}
             <LeafletMap />
             <PlaceDetailsPanel />
+            {activeTrip ? (
+              <ItineraryRail
+                tripId={activeTrip.id}
+                startDate={activeTrip.startDate}
+                endDate={activeTrip.endDate}
+              />
+            ) : null}
           </div>
         </ResizablePanel>
 
@@ -98,9 +107,13 @@ export default function Dashboard() {
               tripId={activeTrip.id}
               trip={activeTrip}
               onTripChange={() => {
-                // We might need to refresh trip data here
-                // For now, let's assume the agent updates it and we just need a signal
-                console.log("Trip updated by agent");
+                // Refresh itinerary data
+                mutate(`/api/trips/${encodeURIComponent(activeTrip.id)}/itinerary`);
+                // Also refresh trip details/messages if needed
+                getTrips().then(trips => {
+                  const fresh = trips.find(t => t.id === activeTrip.id);
+                  if (fresh) useAppStore.getState().setActiveTrip({ ...activeTrip, ...fresh });
+                });
               }}
             />
           ) : (

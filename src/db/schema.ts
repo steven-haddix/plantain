@@ -4,6 +4,7 @@ import {
   boolean,
   customType,
   date,
+  integer,
   jsonb,
   pgEnum,
   pgTable,
@@ -104,6 +105,48 @@ export const savedLocations = pgTable(
   ],
 );
 
+export const itineraryEventBucket = pgEnum("itinerary_event_bucket", [
+  "morning",
+  "afternoon",
+  "evening",
+  "night",
+  "anytime",
+]);
+
+export const itineraryEventStatus = pgEnum("itinerary_event_status", [
+  "proposed",
+  "confirmed",
+  "canceled",
+]);
+
+export const itineraryEvents = pgTable(
+  "itinerary_events",
+  {
+    id: text("id").primaryKey(),
+    tripId: text("trip_id")
+      .notNull()
+      .references(() => trips.id, { onDelete: "cascade" }),
+    placeId: text("place_id").references(() => places.id),
+    customTitle: text("custom_title"),
+    dayIndex: integer("day_index").notNull(),
+    bucket: itineraryEventBucket("bucket").notNull().default("anytime"),
+    sortOrder: integer("sort_order").notNull().default(0),
+    isOptional: boolean("is_optional").notNull().default(false),
+    status: itineraryEventStatus("status").notNull().default("proposed"),
+    sourceSavedLocationId: text("source_saved_location_id").references(
+      () => savedLocations.id,
+      { onDelete: "set null" },
+    ),
+    metadata: jsonb("metadata").$type<Record<string, unknown>>(),
+  },
+  (table) => [
+    check(
+      "itinerary_events_place_or_custom",
+      sql`(${table.placeId} is not null and ${table.customTitle} is null) or (${table.placeId} is null and ${table.customTitle} is not null)`,
+    ),
+  ],
+);
+
 export const activityLogs = pgTable("activity_logs", {
   id: text("id").primaryKey(),
   tripId: text("trip_id")
@@ -150,6 +193,7 @@ export type User = typeof users.$inferSelect;
 export type Trip = typeof trips.$inferSelect;
 export type Place = typeof places.$inferSelect;
 export type SavedLocation = typeof savedLocations.$inferSelect;
+export type ItineraryEvent = typeof itineraryEvents.$inferSelect;
 export type ActivityLog = typeof activityLogs.$inferSelect;
 export type ChatThread = typeof chatThreads.$inferSelect;
 export type ChatMessage = typeof chatMessages.$inferSelect;

@@ -6,6 +6,7 @@ import {
     ToolLoopAgent,
     tool,
 } from "ai";
+import { format, isValid, parseISO } from "date-fns";
 import { and, eq, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { z } from "zod";
@@ -18,10 +19,18 @@ import {
     trips,
 } from "@/db/schema";
 import { placesService } from "@/lib/places-search/service";
+import { tripService } from "@/lib/trips/service";
 import { webSearchService } from "@/lib/web-search/service";
 
 export const maxDuration = 60;
 // Force rebuild: 2026-01-03
+
+const formatTripDate = (value?: string | null) => {
+    if (!value) return "Not set";
+    const parsed = parseISO(value);
+    if (!isValid(parsed)) return value;
+    return format(parsed, "EEE, MMM d, yyyy");
+};
 
 export async function POST(req: Request) {
     const { user } = await neonAuth();
@@ -96,15 +105,34 @@ export async function POST(req: Request) {
                     .join("\n")
                 : "No locations saved yet.";
 
+        const itineraryEvents = await tripService.listItineraryEvents(trip.id);
+        const itineraryContext =
+            itineraryEvents.length > 0
+                ? itineraryEvents
+                    .map((event) => {
+                        const title =
+                            event.placeName || event.customTitle || "Untitled";
+                        const optional = event.isOptional ? ", optional" : "";
+                        return `- [ID: ${event.id}] Day ${event.dayIndex + 1} · ${event.bucket} · ${title} (${event.status}${optional})`;
+                    })
+                    .join("\n")
+                : "No itinerary items yet.";
+
         const systemPrompt = `
 You are an expert travel agent and local guide. You are helping a user plan and manage their trip.
 
 **Trip Context:**
 - **Title:** ${trip.title || "Untitled Trip"}
-- **Dates:** ${trip.startDate ? new Date(trip.startDate).toLocaleDateString() : "Not set"} to ${trip.endDate ? new Date(trip.endDate).toLocaleDateString() : "Not set"}
+- **Dates:** ${formatTripDate(trip.startDate)} to ${formatTripDate(trip.endDate)}
+
+**Day Numbering:**
+Day 1 is the trip start date. Tools expect 1-based day numbers (Day 1, Day 2, ...).
 
 **Saved Locations:**
 ${savedLocationsContext}
+
+**Itinerary (Big Items):**
+${itineraryContext}
 
 **Your Goal:**
 Help the user with their travel planning. You can:
@@ -112,6 +140,7 @@ Help the user with their travel planning. You can:
 2. Help organize their itinerary.
 3. Update trip details (like the title or dates) if they ask.
 4. Manage saved locations: add new ones from search results, update notes/status of existing ones, or remove them.
+5. Manage itinerary items: create, list, update, or remove itinerary events.
 
 **Tone:**
 Professional, enthusiastic, helpful, and concise.
@@ -285,6 +314,287 @@ Professional, enthusiastic, helpful, and concise.
                                 ),
                             );
                         return { output: "Location removed." };
+                    },
+                }),
+                listItineraryEvents: tool({
+                    description:
+                        "List itinerary items for the trip, optionally filtered by day or bucket.",
+                    inputSchema: z.object({
+                        dayIndex: z.number().int().min(0).optional(),
+                        bucket: z
+                            .enum([
+                                "morning",
+                                "afternoon",
+                                "evening",
+                                "night",
+                                "anytime",
+                            ])
+                            .optional(),
+                        status: z.enum(["proposed", "confirmed", "canceled"]).optional(),
+                    }),
+                    execute: async (filters) => {
+                        const events = await tripService.listItineraryEvents(
+                            trip.id,
+                            filters,
+                        );
+
+                        if (!events.length) {
+                            return { output: "No itinerary items found." };
+                        }
+
+                        const list = events
+                            .map((event) => {
+                                const title =
+                                    event.placeName ||
+                                    event.customTitle ||
+                                    "Untitled";
+                                const optional = event.isOptional ? ", optional" : "";
+                                return `- [ID: ${event.id}] Day ${event.dayIndex + 1} · ${event.bucket} · ${title} (${event.status}${optional})`;
+                            })
+                            .join("\n");
+
+                        return { output: list };
+                    },
+                }),
+                createItineraryEvent: tool({
+                    description:
+                        "Create an itinerary item for a specific day and bucket.",
+                    inputSchema: z
+                        .object({
+                            placeId: z.string().optional(),
+                            googlePlaceId: z.string().optional().describe("The Google Place ID of the location"),
+                            customTitle: z.string().optional(),
+                            day: z
+                                .number()
+                                .int()
+                                .min(1)
+                                .describe("The day number (1 for the 1st day, 2 for the 2nd day, etc.)"),
+                            bucket: z
+                                .enum([
+                                    "morning",
+                                    "afternoon",
+                                    "evening",
+                                    "night",
+                                    "anytime",
+                                ])
+                                .optional(),
+                            sortOrder: z.number().optional(),
+                            isOptional: z.boolean().optional(),
+                            status: z
+                                .enum(["proposed", "confirmed", "canceled"])
+                                .optional(),
+                            sourceSavedLocationId: z.string().optional(),
+                            metadata: z.record(z.string(), z.unknown()).optional(),
+                        })
+                        .superRefine((data, ctx) => {
+                            if ((data.placeId || data.googlePlaceId) && data.customTitle) {
+                                ctx.addIssue({
+                                    code: z.ZodIssueCode.custom,
+                                    message:
+                                        "Provide either placeId/googlePlaceId or customTitle, not both.",
+                                });
+                            }
+                            if (!data.placeId && !data.googlePlaceId && !data.customTitle) {
+                                ctx.addIssue({
+                                    code: z.ZodIssueCode.custom,
+                                    message: "Provide either placeId, googlePlaceId, or customTitle.",
+                                });
+                            }
+                        }),
+                    execute: async (input) => {
+                        let finalPlaceId = input.placeId;
+
+                        // If googlePlaceId is provided but no internal placeId, resolve it
+                        if (input.googlePlaceId && !finalPlaceId) {
+                            // 1. Check if place exists
+                            let [place] = await db
+                                .select()
+                                .from(places)
+                                .where(eq(places.googlePlaceId, input.googlePlaceId));
+
+                            // 2. If not, fetch details and create it
+                            if (!place) {
+                                try {
+                                    const details = await placesService.getPlaceDetails(input.googlePlaceId);
+
+                                    // Default/Fallback values if details fail
+                                    const name = details?.name || "Unknown Place";
+                                    const lat = details?.latitude || 0;
+                                    const lng = details?.longitude || 0;
+                                    const address = details?.address || "";
+
+                                    const placeId = nanoid();
+                                    [place] = await db
+                                        .insert(places)
+                                        .values({
+                                            id: placeId,
+                                            googlePlaceId: input.googlePlaceId,
+                                            location: sql`ST_SetSRID(ST_MakePoint(${lng}, ${lat}), 4326)::geography`,
+                                            details: {
+                                                name,
+                                                formatted_address: address,
+                                                ...details,
+                                            },
+                                        })
+                                        .returning();
+                                } catch (err) {
+                                    console.error("Failed to fetch/create place details:", err);
+                                    // Fallback? Or fail? 
+                                    // For now, let's fail gracefully if we can't create the place
+                                    return { output: "Failed to resolve place details from Google Place ID." };
+                                }
+                            }
+
+                            if (place) {
+                                finalPlaceId = place.id;
+                            }
+                        }
+
+                        const event = await tripService.createItineraryEvent(
+                            trip.id,
+                            {
+                                ...input,
+                                placeId: finalPlaceId,
+                                dayIndex: input.day - 1,
+                                bucket: input.bucket ?? "anytime",
+                            },
+                        );
+
+                        if (!event) {
+                            return { output: "Failed to create itinerary item." };
+                        }
+
+                        const label = input.customTitle
+                            ? input.customTitle
+                            : "the selected place";
+                        return {
+                            output: `Added ${label} to Day ${input.day} (${input.bucket ?? "anytime"}). [ID: ${event.id}]`,
+                        };
+                    },
+                }),
+                updateItineraryEvent: tool({
+                    description: "Update an existing itinerary item.",
+                    inputSchema: z
+                        .object({
+                            id: z
+                                .string()
+                                .describe("The itinerary item ID (from context)"),
+                            placeId: z.string().nullable().optional(),
+                            googlePlaceId: z.string().optional().describe("The Google Place ID to update to"),
+                            customTitle: z.string().nullable().optional(),
+                            day: z
+                                .number()
+                                .int()
+                                .min(1)
+                                .optional()
+                                .describe("The day number (1 for the 1st day, etc.)"),
+                            bucket: z
+                                .enum([
+                                    "morning",
+                                    "afternoon",
+                                    "evening",
+                                    "night",
+                                    "anytime",
+                                ])
+                                .optional(),
+                            sortOrder: z.number().optional(),
+                            isOptional: z.boolean().optional(),
+                            status: z
+                                .enum(["proposed", "confirmed", "canceled"])
+                                .optional(),
+                            sourceSavedLocationId: z.string().nullable().optional(),
+                            metadata: z
+                                .record(z.string(), z.unknown())
+                                .nullable()
+                                .optional(),
+                        })
+                        .superRefine((data, ctx) => {
+                            if ((data.placeId || data.googlePlaceId) && data.customTitle) {
+                                ctx.addIssue({
+                                    code: z.ZodIssueCode.custom,
+                                    message:
+                                        "Provide either placeId/googlePlaceId or customTitle, not both.",
+                                });
+                            }
+                        }),
+                    execute: async ({ id, day, googlePlaceId, ...updates }) => {
+                        const updatesToApply: any = { ...updates };
+                        if (day !== undefined) {
+                            updatesToApply.dayIndex = day - 1;
+                        }
+
+                        // Resolve googlePlaceId if provided
+                        if (googlePlaceId) {
+                            let [place] = await db
+                                .select()
+                                .from(places)
+                                .where(eq(places.googlePlaceId, googlePlaceId));
+
+                            if (!place) {
+                                try {
+                                    const details = await placesService.getPlaceDetails(googlePlaceId);
+                                    const name = details?.name || "Unknown Place";
+                                    const lat = details?.latitude || 0;
+                                    const lng = details?.longitude || 0;
+                                    const address = details?.address || "";
+
+                                    const placeId = nanoid();
+                                    [place] = await db
+                                        .insert(places)
+                                        .values({
+                                            id: placeId,
+                                            googlePlaceId: googlePlaceId,
+                                            location: sql`ST_SetSRID(ST_MakePoint(${lng}, ${lat}), 4326)::geography`,
+                                            details: {
+                                                name,
+                                                formatted_address: address,
+                                                ...details,
+                                            },
+                                        })
+                                        .returning();
+                                } catch (err) {
+                                    console.error("Failed to fetch/create place details for update:", err);
+                                    return { output: "Failed to resolve place details from Google Place ID." };
+                                }
+                            }
+                            if (place) {
+                                updatesToApply.placeId = place.id;
+                            }
+                        }
+
+                        if (Object.keys(updatesToApply).length === 0) {
+                            return { output: "No updates provided." };
+                        }
+
+                        const event = await tripService.updateItineraryEvent(
+                            trip.id,
+                            id,
+                            updatesToApply,
+                        );
+
+                        if (!event) {
+                            return { output: "Itinerary item not found." };
+                        }
+
+                        return { output: `Itinerary item updated. [ID: ${event.id}]` };
+                    },
+                }),
+                deleteItineraryEvent: tool({
+                    description: "Remove an itinerary item from the trip.",
+                    inputSchema: z.object({
+                        id: z
+                            .string()
+                            .describe("The itinerary item ID (from context)"),
+                    }),
+                    execute: async ({ id }) => {
+                        const event = await tripService.deleteItineraryEvent(
+                            trip.id,
+                            id,
+                        );
+                        if (!event) {
+                            return { output: "Itinerary item not found." };
+                        }
+                        return { output: `Itinerary item removed. [ID: ${event.id}]` };
                     },
                 }),
             },
