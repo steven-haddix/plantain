@@ -1,4 +1,4 @@
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { db } from "@/db";
 import { itineraryEvents, places } from "@/db/schema";
@@ -49,6 +49,8 @@ export type ItineraryEventListItem = {
   metadata: Record<string, unknown> | null;
   placeName: string | null;
   placeAddress: string | null;
+  placeLatitude: number | null;
+  placeLongitude: number | null;
 };
 
 const normalizeCustomTitle = (value: string | null | undefined) => {
@@ -96,6 +98,12 @@ export class TripService {
         sourceSavedLocationId: itineraryEvents.sourceSavedLocationId,
         metadata: itineraryEvents.metadata,
         placeDetails: places.details,
+        placeLatitude: sql<number | null>`ST_Y(${places.location}::geometry)`.as(
+          "place_latitude",
+        ),
+        placeLongitude: sql<number | null>`ST_X(${places.location}::geometry)`.as(
+          "place_longitude",
+        ),
       })
       .from(itineraryEvents)
       .leftJoin(places, eq(itineraryEvents.placeId, places.id))
@@ -129,6 +137,8 @@ export class TripService {
         placeName: placeDetails?.name ?? null,
         placeAddress:
           placeDetails?.formatted_address ?? placeDetails?.address ?? null,
+        placeLatitude: row.placeLatitude ?? null,
+        placeLongitude: row.placeLongitude ?? null,
       };
     });
   }

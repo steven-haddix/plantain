@@ -22,6 +22,8 @@ export type ItineraryEventListItem = {
   metadata: Record<string, unknown> | null;
   placeName: string | null;
   placeAddress: string | null;
+  placeLatitude: number | null;
+  placeLongitude: number | null;
 };
 
 export type ItineraryEventsResponse = {

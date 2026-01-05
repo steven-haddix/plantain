@@ -172,3 +172,19 @@
   padding-left: 1.25rem;
   margin-top: 0.25rem;
 }
+
+.itinerary-marker {
+  background: transparent;
+  border: none;
+}
+
+.itinerary-marker__dot {
+  width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  background: var(--primary);
+  border: 2px solid rgba(255, 255, 255, 0.9);
+  box-shadow:
+    0 0 0 4px rgba(0, 163, 168, 0.35),
+    0 6px 12px rgba(0, 0, 0, 0.2);
+}

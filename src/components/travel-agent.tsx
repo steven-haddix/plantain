@@ -82,6 +82,29 @@ import {
 } from "@/components/ui/collapsible";
 import { ChevronDown, ChevronRight } from "lucide-react";
 
+function PlaceImage({ src, alt }: { src?: string; alt: string }) {
+    const [error, setError] = useState(false);
+
+    if (!src || error) {
+        return (
+            <div className="flex size-full items-center justify-center bg-muted">
+                <MapPin className="size-6 text-muted-foreground/40" />
+            </div>
+        );
+    }
+
+    return (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+            src={src}
+            alt={alt}
+            loading="lazy"
+            onError={() => setError(true)}
+            className="size-full object-cover transition-transform group-hover:scale-110"
+        />
+    );
+}
+
 function SearchPlacesToolCard({
     toolKey,
     places,
@@ -214,19 +237,7 @@ function SearchPlacesToolCard({
                             }}
                         >
                             <div className="relative size-16 shrink-0 overflow-hidden rounded-lg bg-muted">
-                                {place.imageUrl ? (
-                                    // eslint-disable-next-line @next/next/no-img-element
-                                    <img
-                                        src={place.imageUrl}
-                                        alt={place.name}
-                                        loading="lazy"
-                                        className="size-full object-cover transition-transform group-hover:scale-110"
-                                    />
-                                ) : (
-                                    <div className="flex size-full items-center justify-center">
-                                        <MapPin className="size-6 text-muted-foreground/40" />
-                                    </div>
-                                )}
+                                <PlaceImage src={place.imageUrl} alt={place.name} />
                             </div>
                             <div className="flex min-w-0 flex-col py-0.5">
                                 <span className="truncate text-sm font-semibold text-foreground">
