@@ -6,7 +6,15 @@ import { useRouter, useSearchParams } from "next/navigation";
 import useSWR from "swr";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { fetchPlaceDetails, placeDetailsUrl } from "@/lib/place-details";
+import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Carousel,
+  CarouselContent,
+  CarouselItem,
+  CarouselNext,
+  CarouselPrevious,
+} from "@/components/ui/carousel";
+import { fetchPlaceDetails, fetchPlacePhotos, placeDetailsUrl, placePhotosUrl, type PlacePhoto } from "@/lib/place-details";
 
 export function PlaceDetailsPanel() {
   const router = useRouter();
@@ -19,13 +27,20 @@ export function PlaceDetailsPanel() {
     { revalidateOnFocus: false },
   );
 
+  const { data: photosData, isLoading: isLoadingPhotos } = useSWR(
+    placeId ? placePhotosUrl(placeId) : null,
+    fetchPlacePhotos,
+    { revalidateOnFocus: false },
+  );
+
   const place = data?.place;
+  const photos = photosData?.photos || (place?.photos ? place.photos : []);
 
   if (!placeId) return null;
 
   return (
     <div className="pointer-events-none absolute inset-0 z-10">
-      <div className="pointer-events-auto absolute right-4 top-4 w-[360px] max-w-[calc(100vw-2rem)] rounded-2xl border bg-background/90 backdrop-blur shadow-lg">
+      <div className="pointer-events-auto absolute right-4 top-4 w-[400px] max-w-[calc(100vw-2rem)] rounded-2xl border bg-background/90 backdrop-blur shadow-lg">
         <div className="flex items-start justify-between gap-3 border-b p-4">
           <div className="min-w-0">
             <div className="text-sm text-muted-foreground">Place</div>
@@ -61,22 +76,56 @@ export function PlaceDetailsPanel() {
           </Button>
         </div>
 
-        <div className="space-y-3 p-4">
+        <div className="space-y-4 p-4">
           {error ? (
             <div className="text-sm text-destructive">
               Failed to load place details.
             </div>
           ) : null}
 
-          {place?.photos?.[0]?.url ? (
-            <Image
-              alt={place?.name || "Place photo"}
-              src={place.photos[0].url}
-              width={640}
-              height={360}
-              className="h-40 w-full rounded-xl object-cover"
-            />
-          ) : null}
+          <div className="relative">
+            {isLoadingPhotos ? (
+              <div className="flex w-full gap-2 overflow-hidden">
+                <Skeleton className="aspect-[16/10] h-48 w-full flex-none rounded-xl" />
+                <Skeleton className="aspect-[16/10] h-48 w-20 flex-none rounded-xl" />
+              </div>
+            ) : photos.length > 0 ? (
+              <Carousel className="group w-full">
+                <CarouselContent className="-ml-2">
+                  {photos.map((photo: PlacePhoto, idx: number) => (
+                    <CarouselItem key={photo.id || idx} className="pl-2">
+                      <div className="relative aspect-[16/10] overflow-hidden rounded-xl bg-muted">
+                        <Image
+                          alt={`${place?.name || "Place"} photo ${idx + 1}`}
+                          src={photo.url}
+                          fill
+                          className="object-cover transition-transform hover:scale-105"
+                        />
+                      </div>
+                    </CarouselItem>
+                  ))}
+                </CarouselContent>
+                {photos.length > 1 && (
+                  <>
+                    <CarouselPrevious variant="secondary" className="left-2 top-1/2 -translate-y-1/2 bg-background/60 opacity-0 shadow-md transition-opacity group-hover:opacity-100 disabled:opacity-0" />
+                    <CarouselNext variant="secondary" className="right-2 top-1/2 -translate-y-1/2 bg-background/60 opacity-0 shadow-md transition-opacity group-hover:opacity-100 disabled:opacity-0" />
+                  </>
+                )}
+              </Carousel>
+            ) : place?.photos?.[0]?.url ? (
+              <Image
+                alt={place?.name || "Place photo"}
+                src={place.photos[0].url}
+                width={640}
+                height={360}
+                className="h-48 w-full rounded-xl object-cover"
+              />
+            ) : (
+              <div className="flex h-48 w-full items-center justify-center rounded-xl bg-muted text-sm text-muted-foreground">
+                No photos available
+              </div>
+            )}
+          </div>
 
           {place?.address ? (
             <div>

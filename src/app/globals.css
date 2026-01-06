@@ -188,3 +188,13 @@
     0 0 0 4px rgba(0, 163, 168, 0.35),
     0 6px 12px rgba(0, 0, 0, 0.2);
 }
+
+@layer utilities {
+  .scrollbar-hide {
+    -ms-overflow-style: none; /* IE and Edge */
+    scrollbar-width: none; /* Firefox */
+  }
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none; /* Chrome, Safari and Opera */
+  }
+}
