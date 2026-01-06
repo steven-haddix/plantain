@@ -3,14 +3,14 @@
 import { addDays, format, isValid, parseISO } from "date-fns";
 import { Calendar, X } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useMemo, useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import useSWR from "swr";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { cn } from "@/lib/utils";
 import { fetcher } from "@/lib/fetcher";
+import { cn } from "@/lib/utils";
 import { ItineraryEventCard } from "./itinerary-event-card";
-import type { ItineraryEventsResponse, ItineraryEventListItem } from "./types";
+import type { ItineraryEventListItem, ItineraryEventsResponse } from "./types";
 import { bucketOrder } from "./utils";
 
 function itineraryUrl(tripId: string) {
@@ -29,7 +29,9 @@ function getTripDayCount(args: {
   const end = parseISO(endDate);
   if (!isValid(start) || !isValid(end)) return Math.max(1, fallbackDays);
 
-  const diff = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
+  const diff = Math.ceil(
+    (end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24),
+  );
   return Math.max(1, diff + 1);
 }
 
@@ -47,7 +49,9 @@ export function ItineraryRail({
 
   const isOpen = searchParams.get("itinerary") === "1";
   const selectedEventId = searchParams.get("event") ?? undefined;
-  const targetDayIndex = searchParams.get("day") ? Number(searchParams.get("day")) : null;
+  const targetDayIndex = searchParams.get("day")
+    ? Number(searchParams.get("day"))
+    : null;
 
   const { data, isLoading, error } = useSWR<ItineraryEventsResponse>(
     tripId ? itineraryUrl(tripId) : null,
@@ -135,7 +139,6 @@ export function ItineraryRail({
     }
   }, [isOpen, targetDayIndex]);
 
-
   return (
     <div className="pointer-events-none absolute inset-0 z-10">
       <div className="pointer-events-auto absolute left-4 top-4">
@@ -160,7 +163,8 @@ export function ItineraryRail({
                 </div>
                 {hasValidStart && endDate ? (
                   <div className="text-xs text-muted-foreground mt-0.5">
-                    {format(start!, "MMM d")} – {format(parseISO(endDate), "MMM d, yyyy")}
+                    {format(start!, "MMM d")} –{" "}
+                    {format(parseISO(endDate), "MMM d, yyyy")}
                   </div>
                 ) : null}
               </div>
@@ -177,28 +181,39 @@ export function ItineraryRail({
 
             <div className="relative">
               {isLoading ? (
-                <div className="p-8 text-center text-sm text-muted-foreground">Loading itinerary…</div>
+                <div className="p-8 text-center text-sm text-muted-foreground">
+                  Loading itinerary…
+                </div>
               ) : null}
 
               {error ? (
-                <div className="p-8 text-center text-sm text-destructive">Failed to load itinerary.</div>
+                <div className="p-8 text-center text-sm text-destructive">
+                  Failed to load itinerary.
+                </div>
               ) : null}
 
-              <ScrollArea className="h-[min(600px,calc(100vh-10rem))]">
-                <div className="relative pb-8 pt-4">
+              <ScrollArea className="flex h-[min(600px,calc(100vh-10rem))]">
+                <div className="min-w-0 relative pb-8 pt-4">
                   {/* Continuous spine line */}
                   <div className="absolute left-[27px] top-4 bottom-4 w-px bg-border/60" />
 
                   {Array.from({ length: dayCount }).map((_, dayIndex) => {
                     const dayEvents = eventsByDay.get(dayIndex) || [];
-                    const date = hasValidStart ? addDays(start!, dayIndex) : null;
-                    const dateLabel = date ? format(date, "EEEE, d MMM") : `Day ${dayIndex + 1}`;
+                    const date = hasValidStart
+                      ? addDays(start!, dayIndex)
+                      : null;
+                    const dateLabel = date
+                      ? format(date, "EEEE, d MMM")
+                      : `Day ${dayIndex + 1}`;
                     const isFirstDay = dayIndex === 0;
 
                     return (
                       <div
                         key={dayIndex}
-                        className={cn("group relative pl-16 pr-4", !isFirstDay && "mt-8")}
+                        className={cn(
+                          "group relative pl-16 pr-4",
+                          !isFirstDay && "mt-8",
+                        )}
                         ref={(el) => {
                           if (el) dayRefs.current.set(dayIndex, el);
                           else dayRefs.current.delete(dayIndex);
@@ -209,9 +224,15 @@ export function ItineraryRail({
 
                         {/* Day Header */}
                         <div className="mb-4 -mt-1 flex items-baseline justify-between">
-                          <h3 className="font-semibold text-foreground/90">{dateLabel}</h3>
+                          <h3 className="font-semibold text-foreground/90">
+                            {dateLabel}
+                          </h3>
                           <span className="text-xs text-muted-foreground font-medium">
-                            {dayIndex === 0 ? "1st day" : dayIndex === 1 ? "2nd day" : `${dayIndex + 1}th day`}
+                            {dayIndex === 0
+                              ? "1st day"
+                              : dayIndex === 1
+                                ? "2nd day"
+                                : `${dayIndex + 1}th day`}
                           </span>
                         </div>
 
@@ -226,10 +247,14 @@ export function ItineraryRail({
                               return (
                                 <div key={event.id} className="relative">
                                   {/* Event Node on spine */}
-                                  <div className={cn(
-                                    "absolute -left-[39px] top-4 size-2 rounded-full border bg-background ring-4 ring-background",
-                                    isSelected ? "border-primary bg-primary" : "border-border"
-                                  )} />
+                                  <div
+                                    className={cn(
+                                      "absolute -left-[39px] top-4 size-2 rounded-full border bg-background ring-4 ring-background",
+                                      isSelected
+                                        ? "border-primary bg-primary"
+                                        : "border-border",
+                                    )}
+                                  />
 
                                   <ItineraryEventCard
                                     event={event}
