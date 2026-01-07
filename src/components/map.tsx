@@ -1,14 +1,16 @@
 "use client";
 
 import L from "leaflet";
+import { Trash2 } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo } from "react";
 import { MapContainer, Marker, Popup, TileLayer, useMap } from "react-leaflet";
 import useSWR from "swr";
-import { useMapStore, type MapPlace } from "@/lib/map-store";
-import { useAppStore } from "@/lib/store";
-import { fetcher } from "@/lib/fetcher";
 import type { ItineraryEventsResponse } from "@/components/itinerary/types";
+import { Button } from "@/components/ui/button";
+import { fetcher } from "@/lib/fetcher";
+import { type MapPlace, useMapStore } from "@/lib/map-store";
+import { useAppStore } from "@/lib/store";
 
 // Fix for default marker icon missing in Leaflet + Next.js
 // We do this inside the component to ensure it only runs on client
@@ -56,6 +58,12 @@ export default function MapView() {
   const searchParams = useSearchParams();
   const activeResearch = useMapStore((state) => state.activeResearch);
   const pinnedResearch = useMapStore((state) => state.pinnedResearch);
+  const accumulatedSearchPlaces = useMapStore(
+    (state) => state.accumulatedSearchPlaces,
+  );
+  const clearAllSearchResults = useMapStore(
+    (state) => state.clearAllSearchResults,
+  );
   const selectPlace = useMapStore((state) => state.selectPlace);
   const activeTrip = useAppStore((state) => state.activeTrip);
   const placeParam = searchParams.get("place");
@@ -68,14 +76,15 @@ export default function MapView() {
     selectPlace(placeParam ?? undefined);
   }, [placeParam, selectPlace]);
 
+  // Combine accumulated search places with pinned research places
   const researchPlaces = useMemo(() => {
     const list = [
-      ...(activeResearch?.places ?? []),
+      ...accumulatedSearchPlaces,
       ...pinnedResearch.flatMap((layer) => layer.places),
     ];
     const byId = new Map(list.map((place) => [place.googlePlaceId, place]));
     return Array.from(byId.values());
-  }, [activeResearch, pinnedResearch]);
+  }, [accumulatedSearchPlaces, pinnedResearch]);
 
   const { data: itineraryData } = useSWR<ItineraryEventsResponse>(
     activeTrip?.id
@@ -89,7 +98,8 @@ export default function MapView() {
     const byId = new Map<string, MapPlace>();
     for (const event of itineraryData?.events ?? []) {
       if (!event.placeGooglePlaceId) continue;
-      if (event.placeLatitude === null || event.placeLongitude === null) continue;
+      if (event.placeLatitude === null || event.placeLongitude === null)
+        continue;
       if (byId.has(event.placeGooglePlaceId)) continue;
       byId.set(event.placeGooglePlaceId, {
         googlePlaceId: event.placeGooglePlaceId,
@@ -124,8 +134,30 @@ export default function MapView() {
     [],
   );
 
+  const handleClearResults = () => {
+    if (confirm("Clear all search results from the map?")) {
+      clearAllSearchResults();
+    }
+  };
+
+  const hasSearchResults = accumulatedSearchPlaces.length > 0;
+
   return (
-    <div className="h-full w-full relative z-0">
+    <div className="relative h-full w-full z-0">
+      {hasSearchResults && (
+        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-[1000]">
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={handleClearResults}
+            className="shadow-lg gap-1.5"
+          >
+            <Trash2 className="size-3.5" />
+            Clear {accumulatedSearchPlaces.length} result
+            {accumulatedSearchPlaces.length !== 1 ? "s" : ""}
+          </Button>
+        </div>
+      )}
       <MapContainer
         center={[51.505, -0.09]}
         zoom={13}

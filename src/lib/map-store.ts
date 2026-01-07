@@ -22,6 +22,7 @@ type ResearchLayer = {
 type MapState = {
     activeResearch?: ResearchLayer;
     pinnedResearch: ResearchLayer[];
+    accumulatedSearchPlaces: MapPlace[];
     selectedPlaceId?: string;
     appliedToolKeys: Record<string, true>;
     applySearchResults: (args: {
@@ -31,16 +32,22 @@ type MapState = {
     }) => void;
     pinActiveResearch: () => void;
     clearResearch: () => void;
+    clearAllSearchResults: () => void;
     selectPlace: (googlePlaceId?: string) => void;
 };
 
 export const useMapStore = create<MapState>((set, get) => ({
     pinnedResearch: [],
+    accumulatedSearchPlaces: [],
     appliedToolKeys: {},
 
     applySearchResults: ({ toolKey, title, places }) => {
-        const { appliedToolKeys } = get();
+        const { appliedToolKeys, accumulatedSearchPlaces } = get();
         if (appliedToolKeys[toolKey]) return;
+
+        // Accumulate new places without duplicates
+        const existingIds = new Set(accumulatedSearchPlaces.map((p) => p.googlePlaceId));
+        const newPlaces = places.filter((p) => !existingIds.has(p.googlePlaceId));
 
         set({
             activeResearch: {
@@ -49,6 +56,7 @@ export const useMapStore = create<MapState>((set, get) => ({
                 places,
                 createdAt: Date.now(),
             },
+            accumulatedSearchPlaces: [...accumulatedSearchPlaces, ...newPlaces],
             appliedToolKeys: { ...appliedToolKeys, [toolKey]: true },
         });
     },
@@ -69,6 +77,13 @@ export const useMapStore = create<MapState>((set, get) => ({
     },
 
     clearResearch: () => set({ activeResearch: undefined, pinnedResearch: [] }),
+
+    clearAllSearchResults: () =>
+        set({
+            accumulatedSearchPlaces: [],
+            appliedToolKeys: {},
+            activeResearch: undefined,
+        }),
 
     selectPlace: (googlePlaceId) => set({ selectedPlaceId: googlePlaceId }),
 }));
