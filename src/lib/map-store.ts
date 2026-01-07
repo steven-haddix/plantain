@@ -10,6 +10,7 @@ export type MapPlace = {
     reviewsCount?: number;
     category?: string;
     imageUrl?: string;
+    dayIndex?: number; // For itinerary events - which day this place is scheduled for
 };
 
 type ResearchLayer = {

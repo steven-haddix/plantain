@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { fetcher } from "@/lib/fetcher";
 import { type MapPlace, useMapStore } from "@/lib/map-store";
 import { useAppStore } from "@/lib/store";
+import { getDayHue } from "./itinerary/utils";
 
 // Fix for default marker icon missing in Leaflet + Next.js
 // We do this inside the component to ensure it only runs on client
@@ -33,6 +34,22 @@ const fixLeafletIcons = () => {
     ).toString(),
   });
 };
+
+
+/**
+ * Create a day-specific marker icon with dynamic color based on day index.
+ * Uses CSS custom property for the hue to enable smooth theming.
+ */
+function createDayMarkerIcon(dayIndex: number) {
+  const hue = getDayHue(dayIndex);
+  return L.divIcon({
+    className: "itinerary-marker",
+    html: `<div class="itinerary-marker__dot" style="--itinerary-day-hue: ${hue}"></div>`,
+    iconSize: [20, 20],
+    iconAnchor: [10, 10],
+    popupAnchor: [0, -8],
+  });
+}
 
 function MapController({ places }: { places: MapPlace[] }) {
   const map = useMap();
@@ -107,10 +124,22 @@ export default function MapView() {
         address: event.placeAddress ?? undefined,
         latitude: event.placeLatitude,
         longitude: event.placeLongitude,
+        dayIndex: event.dayIndex,
       });
     }
     return Array.from(byId.values());
   }, [itineraryData]);
+
+  // Create day-specific marker icons (memoized per day)
+  const dayMarkerIcons = useMemo(() => {
+    const icons = new Map<number, ReturnType<typeof createDayMarkerIcon>>();
+    for (const place of itineraryPlaces) {
+      if (place.dayIndex !== undefined && !icons.has(place.dayIndex)) {
+        icons.set(place.dayIndex, createDayMarkerIcon(place.dayIndex));
+      }
+    }
+    return icons;
+  }, [itineraryPlaces]);
 
   const selectablePlaces = useMemo(() => {
     const byId = new Map<string, MapPlace>();
@@ -121,18 +150,6 @@ export default function MapView() {
     }
     return Array.from(byId.values());
   }, [researchPlaces, itineraryPlaces]);
-
-  const itineraryMarkerIcon = useMemo(
-    () =>
-      L.divIcon({
-        className: "itinerary-marker",
-        html: '<div class="itinerary-marker__dot"></div>',
-        iconSize: [20, 20],
-        iconAnchor: [10, 10],
-        popupAnchor: [0, -8],
-      }),
-    [],
-  );
 
   const handleClearResults = () => {
     if (confirm("Clear all search results from the map?")) {
@@ -169,31 +186,42 @@ export default function MapView() {
           url="https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png"
         />
         <MapController places={selectablePlaces} />
-        {itineraryPlaces.map((place) => (
-          <Marker
-            key={`itinerary-${place.googlePlaceId}`}
-            position={[place.latitude, place.longitude]}
-            icon={itineraryMarkerIcon}
-            zIndexOffset={500}
-            eventHandlers={{
-              click: () => {
-                selectPlace(place.googlePlaceId);
-                const next = new URLSearchParams(searchParams.toString());
-                next.set("place", place.googlePlaceId);
-                router.replace(`/dashboard?${next.toString()}`);
-              },
-            }}
-          >
-            <Popup>
-              <div className="text-sm font-medium">{place.name}</div>
-              {place.address ? (
-                <div className="text-xs text-muted-foreground">
-                  {place.address}
-                </div>
-              ) : null}
-            </Popup>
-          </Marker>
-        ))}
+        {itineraryPlaces.map((place) => {
+          // Get the day-specific icon, fall back to day 0 icon if no dayIndex
+          const dayIndex = place.dayIndex ?? 0;
+          const icon = dayMarkerIcons.get(dayIndex) ?? dayMarkerIcons.get(0);
+
+          return (
+            <Marker
+              key={`itinerary-${place.googlePlaceId}`}
+              position={[place.latitude, place.longitude]}
+              icon={icon}
+              zIndexOffset={500}
+              eventHandlers={{
+                click: () => {
+                  selectPlace(place.googlePlaceId);
+                  const next = new URLSearchParams(searchParams.toString());
+                  next.set("place", place.googlePlaceId);
+                  router.replace(`/dashboard?${next.toString()}`);
+                },
+              }}
+            >
+              <Popup>
+                <div className="text-sm font-medium">{place.name}</div>
+                {place.address ? (
+                  <div className="text-xs text-muted-foreground">
+                    {place.address}
+                  </div>
+                ) : null}
+                {place.dayIndex !== undefined && (
+                  <div className="text-xs text-muted-foreground mt-1">
+                    Day {place.dayIndex + 1}
+                  </div>
+                )}
+              </Popup>
+            </Marker>
+          );
+        })}
         {researchPlaces.map((place, index) => (
           <Marker
             key={`${place.googlePlaceId ?? "place"}-${index}`}

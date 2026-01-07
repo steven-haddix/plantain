@@ -11,7 +11,7 @@ import { fetcher } from "@/lib/fetcher";
 import { cn } from "@/lib/utils";
 import { ItineraryEventCard } from "./itinerary-event-card";
 import type { ItineraryEventListItem, ItineraryEventsResponse } from "./types";
-import { bucketOrder } from "./utils";
+import { bucketOrder, getDayHue } from "./utils";
 
 function itineraryUrl(tripId: string) {
   return `/api/trips/${encodeURIComponent(tripId)}/itinerary`;
@@ -220,7 +220,12 @@ export function ItineraryRail({
                         }}
                       >
                         {/* Timeline Node for Day Header */}
-                        <div className="absolute left-[21px] top-0.5 z-10 size-3 rounded-full border-2 border-primary bg-background ring-4 ring-background" />
+                        <div
+                          className="absolute left-[21px] top-0.5 z-10 size-3 rounded-full border-2 bg-background ring-4 ring-background transition-colors"
+                          style={{
+                            borderColor: `oklch(0.7 0.14 ${getDayHue(dayIndex)})`,
+                          }}
+                        />
 
                         {/* Day Header */}
                         <div className="mb-4 -mt-1 flex items-baseline justify-between">
@@ -249,11 +254,17 @@ export function ItineraryRail({
                                   {/* Event Node on spine */}
                                   <div
                                     className={cn(
-                                      "absolute -left-[39px] top-4 size-2 rounded-full border bg-background ring-4 ring-background",
-                                      isSelected
-                                        ? "border-primary bg-primary"
-                                        : "border-border",
+                                      "absolute -left-[39px] top-4 size-2 rounded-full border bg-background ring-4 ring-background transition-colors",
+                                      !isSelected && "border-border",
                                     )}
+                                    style={
+                                      isSelected
+                                        ? {
+                                          borderColor: `oklch(0.7 0.14 ${getDayHue(dayIndex)})`,
+                                          backgroundColor: `oklch(0.7 0.14 ${getDayHue(dayIndex)})`,
+                                        }
+                                        : undefined
+                                    }
                                   />
 
                                   <ItineraryEventCard
