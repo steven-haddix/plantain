@@ -1,6 +1,6 @@
 "use client";
 
-import { X } from "lucide-react";
+import { MapPin, X } from "lucide-react";
 import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
 import useSWR from "swr";
@@ -127,16 +127,33 @@ export function PlaceDetailsPanel() {
             )}
           </div>
 
-          {place?.address ? (
-            <div>
-              <div className="text-xs font-medium text-muted-foreground">
-                Address
-              </div>
-              <div className="text-sm">{place.address}</div>
+          {place?.address || placeId ? (
+            <div className="flex items-center justify-between gap-4">
+              {place?.address && (
+                <div className="min-w-0">
+                  <div className="text-xs font-medium text-muted-foreground">
+                    Address
+                  </div>
+                  <div className="truncate text-sm">{place.address}</div>
+                </div>
+              )}
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8 shrink-0 gap-1.5 text-xs"
+                onClick={() => {
+                  const query = encodeURIComponent(place?.name || placeId);
+                  const url = `https://www.google.com/maps/search/?api=1&query=${query}&query_place_id=${placeId}`;
+                  window.open(url, "_blank", "noopener,noreferrer");
+                }}
+              >
+                <MapPin className="size-3.5" />
+                Google Map
+              </Button>
             </div>
           ) : null}
 
-          <div className="text-xs text-muted-foreground">
+          <div className="text-[10px] text-muted-foreground/50">
             ID: <span className="font-mono">{placeId}</span>
           </div>
         </div>
