@@ -16,6 +16,7 @@ export function SavedLocationsRail({ tripId }: { tripId: string }) {
     const selectPlace = useMapStore((state) => state.selectPlace);
 
     const isOpen = searchParams.get("saved") === "1";
+    const isItineraryOpen = searchParams.get("itinerary") === "1";
 
     // SWR fetcher wrapper for server action
     const fetcher = async () => getSavedLocations(tripId);
@@ -24,6 +25,9 @@ export function SavedLocationsRail({ tripId }: { tripId: string }) {
         tripId && isOpen ? ["saved-locations", tripId] : null,
         fetcher
     );
+
+    // Hide the rail controls completely if itinerary is open to prevent z-index issues
+    if (isItineraryOpen) return null;
 
     const setParams = (next: URLSearchParams) => {
         router.replace(`/dashboard?${next.toString()}`);
