@@ -33,6 +33,21 @@ export const users = pgTable("users", {
   avatarUrl: text("avatar_url"),
 });
 
+export const placeCategory = pgEnum("place_category", [
+  "restaurant",
+  "hotel",
+  "attraction",
+  "airport",
+  "bar",
+  "cafe",
+  "park",
+  "museum",
+  "shopping",
+  "transport",
+  "activity",
+  "other",
+]);
+
 export const trips = pgTable(
   "trips",
   {
@@ -63,6 +78,7 @@ export const places = pgTable(
     id: text("id").primaryKey(),
     googlePlaceId: text("google_place_id").notNull(),
     location: geographyPoint("location").notNull(),
+    category: placeCategory("category"),
     details: jsonb("details").$type<Record<string, unknown>>(),
     summaryEmbedding: vector("summary_embedding", { dimensions: 1536 }),
   },
@@ -78,6 +94,8 @@ export const places = pgTable(
     ),
   ],
 );
+
+
 
 export const savedLocationStatus = pgEnum("saved_location_status", [
   "interested",

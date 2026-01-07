@@ -110,8 +110,7 @@ export async function POST(req: Request) {
             itineraryEvents.length > 0
                 ? itineraryEvents
                     .map((event) => {
-                        const title =
-                            event.placeName || event.customTitle || "Untitled";
+                        const title = event.placeName || event.customTitle || "Untitled";
                         const optional = event.isOptional ? ", optional" : "";
                         return `- [ID: ${event.id}] Day ${event.dayIndex + 1} · ${event.bucket} · ${title} (${event.status}${optional})`;
                     })
@@ -127,6 +126,10 @@ You are an expert travel agent and local guide. You are helping a user plan and 
 
 **Day Numbering:**
 Day 1 is the trip start date. Tools expect 1-based day numbers (Day 1, Day 2, ...).
+
+**Place Categories:**
+When creating saved locations or itinerary events, use one of these categories:
+- restaurant, hotel, attraction, airport, bar, cafe, park, museum, shopping, transport, activity, other
 
 **Saved Locations:**
 ${savedLocationsContext}
@@ -239,6 +242,7 @@ Professional, enthusiastic, helpful, and concise.
                         address: z.string().optional(),
                         note: z.string().optional(),
                         status: z.enum(["interested", "visited"]).default("interested"),
+                        category: z.enum(["restaurant", "hotel", "attraction", "airport", "bar", "cafe", "park", "museum", "shopping", "transport", "activity", "other"]).optional(),
                     }),
                     execute: async (input) => {
                         // 1. Upsert place
@@ -255,6 +259,7 @@ Professional, enthusiastic, helpful, and concise.
                                     id: placeId,
                                     googlePlaceId: input.googlePlaceId,
                                     location: sql`ST_SetSRID(ST_MakePoint(${input.longitude}, ${input.latitude}), 4326)::geography`,
+                                    category: input.category,
                                     details: {
                                         name: input.name,
                                         formatted_address: input.address,
@@ -322,13 +327,7 @@ Professional, enthusiastic, helpful, and concise.
                     inputSchema: z.object({
                         dayIndex: z.number().int().min(0).optional(),
                         bucket: z
-                            .enum([
-                                "morning",
-                                "afternoon",
-                                "evening",
-                                "night",
-                                "anytime",
-                            ])
+                            .enum(["morning", "afternoon", "evening", "night", "anytime"])
                             .optional(),
                         status: z.enum(["proposed", "confirmed", "canceled"]).optional(),
                     }),
@@ -345,9 +344,7 @@ Professional, enthusiastic, helpful, and concise.
                         const list = events
                             .map((event) => {
                                 const title =
-                                    event.placeName ||
-                                    event.customTitle ||
-                                    "Untitled";
+                                    event.placeName || event.customTitle || "Untitled";
                                 const optional = event.isOptional ? ", optional" : "";
                                 return `- [ID: ${event.id}] Day ${event.dayIndex + 1} · ${event.bucket} · ${title} (${event.status}${optional})`;
                             })
@@ -362,27 +359,40 @@ Professional, enthusiastic, helpful, and concise.
                     inputSchema: z
                         .object({
                             placeId: z.string().optional(),
-                            googlePlaceId: z.string().optional().describe("The Google Place ID of the location"),
+                            googlePlaceId: z
+                                .string()
+                                .optional()
+                                .describe("The Google Place ID of the location"),
                             customTitle: z.string().optional(),
+                            category: z
+                                .enum([
+                                    "restaurant",
+                                    "hotel",
+                                    "attraction",
+                                    "airport",
+                                    "bar",
+                                    "cafe",
+                                    "park",
+                                    "museum",
+                                    "shopping",
+                                    "transport",
+                                    "activity",
+                                    "other",
+                                ])
+                                .optional(),
                             day: z
                                 .number()
                                 .int()
                                 .min(1)
-                                .describe("The day number (1 for the 1st day, 2 for the 2nd day, etc.)"),
+                                .describe(
+                                    "The day number (1 for the 1st day, 2 for the 2nd day, etc.)",
+                                ),
                             bucket: z
-                                .enum([
-                                    "morning",
-                                    "afternoon",
-                                    "evening",
-                                    "night",
-                                    "anytime",
-                                ])
+                                .enum(["morning", "afternoon", "evening", "night", "anytime"])
                                 .optional(),
                             sortOrder: z.number().optional(),
                             isOptional: z.boolean().optional(),
-                            status: z
-                                .enum(["proposed", "confirmed", "canceled"])
-                                .optional(),
+                            status: z.enum(["proposed", "confirmed", "canceled"]).optional(),
                             sourceSavedLocationId: z.string().optional(),
                             metadata: z.record(z.string(), z.unknown()).optional(),
                         })
@@ -397,7 +407,8 @@ Professional, enthusiastic, helpful, and concise.
                             if (!data.placeId && !data.googlePlaceId && !data.customTitle) {
                                 ctx.addIssue({
                                     code: z.ZodIssueCode.custom,
-                                    message: "Provide either placeId, googlePlaceId, or customTitle.",
+                                    message:
+                                        "Provide either placeId, googlePlaceId, or customTitle.",
                                 });
                             }
                         }),
@@ -415,7 +426,9 @@ Professional, enthusiastic, helpful, and concise.
                             // 2. If not, fetch details and create it
                             if (!place) {
                                 try {
-                                    const details = await placesService.getPlaceDetails(input.googlePlaceId);
+                                    const details = await placesService.getPlaceDetails(
+                                        input.googlePlaceId,
+                                    );
 
                                     // Default/Fallback values if details fail
                                     const name = details?.name || "Unknown Place";
@@ -430,6 +443,7 @@ Professional, enthusiastic, helpful, and concise.
                                             id: placeId,
                                             googlePlaceId: input.googlePlaceId,
                                             location: sql`ST_SetSRID(ST_MakePoint(${lng}, ${lat}), 4326)::geography`,
+                                            category: input.category,
                                             details: {
                                                 name,
                                                 formatted_address: address,
@@ -439,9 +453,12 @@ Professional, enthusiastic, helpful, and concise.
                                         .returning();
                                 } catch (err) {
                                     console.error("Failed to fetch/create place details:", err);
-                                    // Fallback? Or fail? 
+                                    // Fallback? Or fail?
                                     // For now, let's fail gracefully if we can't create the place
-                                    return { output: "Failed to resolve place details from Google Place ID." };
+                                    return {
+                                        output:
+                                            "Failed to resolve place details from Google Place ID.",
+                                    };
                                 }
                             }
 
@@ -450,15 +467,12 @@ Professional, enthusiastic, helpful, and concise.
                             }
                         }
 
-                        const event = await tripService.createItineraryEvent(
-                            trip.id,
-                            {
-                                ...input,
-                                placeId: finalPlaceId,
-                                dayIndex: input.day - 1,
-                                bucket: input.bucket ?? "anytime",
-                            },
-                        );
+                        const event = await tripService.createItineraryEvent(trip.id, {
+                            ...input,
+                            placeId: finalPlaceId,
+                            dayIndex: input.day - 1,
+                            bucket: input.bucket ?? "anytime",
+                        });
 
                         if (!event) {
                             return { output: "Failed to create itinerary item." };
@@ -476,11 +490,12 @@ Professional, enthusiastic, helpful, and concise.
                     description: "Update an existing itinerary item.",
                     inputSchema: z
                         .object({
-                            id: z
-                                .string()
-                                .describe("The itinerary item ID (from context)"),
+                            id: z.string().describe("The itinerary item ID (from context)"),
                             placeId: z.string().nullable().optional(),
-                            googlePlaceId: z.string().optional().describe("The Google Place ID to update to"),
+                            googlePlaceId: z
+                                .string()
+                                .optional()
+                                .describe("The Google Place ID to update to"),
                             customTitle: z.string().nullable().optional(),
                             day: z
                                 .number()
@@ -489,24 +504,13 @@ Professional, enthusiastic, helpful, and concise.
                                 .optional()
                                 .describe("The day number (1 for the 1st day, etc.)"),
                             bucket: z
-                                .enum([
-                                    "morning",
-                                    "afternoon",
-                                    "evening",
-                                    "night",
-                                    "anytime",
-                                ])
+                                .enum(["morning", "afternoon", "evening", "night", "anytime"])
                                 .optional(),
                             sortOrder: z.number().optional(),
                             isOptional: z.boolean().optional(),
-                            status: z
-                                .enum(["proposed", "confirmed", "canceled"])
-                                .optional(),
+                            status: z.enum(["proposed", "confirmed", "canceled"]).optional(),
                             sourceSavedLocationId: z.string().nullable().optional(),
-                            metadata: z
-                                .record(z.string(), z.unknown())
-                                .nullable()
-                                .optional(),
+                            metadata: z.record(z.string(), z.unknown()).nullable().optional(),
                         })
                         .superRefine((data, ctx) => {
                             if ((data.placeId || data.googlePlaceId) && data.customTitle) {
@@ -532,7 +536,8 @@ Professional, enthusiastic, helpful, and concise.
 
                             if (!place) {
                                 try {
-                                    const details = await placesService.getPlaceDetails(googlePlaceId);
+                                    const details =
+                                        await placesService.getPlaceDetails(googlePlaceId);
                                     const name = details?.name || "Unknown Place";
                                     const lat = details?.latitude || 0;
                                     const lng = details?.longitude || 0;
@@ -553,8 +558,14 @@ Professional, enthusiastic, helpful, and concise.
                                         })
                                         .returning();
                                 } catch (err) {
-                                    console.error("Failed to fetch/create place details for update:", err);
-                                    return { output: "Failed to resolve place details from Google Place ID." };
+                                    console.error(
+                                        "Failed to fetch/create place details for update:",
+                                        err,
+                                    );
+                                    return {
+                                        output:
+                                            "Failed to resolve place details from Google Place ID.",
+                                    };
                                 }
                             }
                             if (place) {
@@ -582,15 +593,10 @@ Professional, enthusiastic, helpful, and concise.
                 deleteItineraryEvent: tool({
                     description: "Remove an itinerary item from the trip.",
                     inputSchema: z.object({
-                        id: z
-                            .string()
-                            .describe("The itinerary item ID (from context)"),
+                        id: z.string().describe("The itinerary item ID (from context)"),
                     }),
                     execute: async ({ id }) => {
-                        const event = await tripService.deleteItineraryEvent(
-                            trip.id,
-                            id,
-                        );
+                        const event = await tripService.deleteItineraryEvent(trip.id, id);
                         if (!event) {
                             return { output: "Itinerary item not found." };
                         }
