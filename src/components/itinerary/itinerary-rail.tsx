@@ -98,6 +98,7 @@ export function ItineraryRail({
   const open = () => {
     const next = new URLSearchParams(searchParams.toString());
     next.set("itinerary", "1");
+    next.delete("saved");
     setParams(next);
   };
 

@@ -508,7 +508,7 @@ export function TravelAgent({ tripId, trip, onTripChange }: TravelAgentProps) {
         messages.length > 0 && messages[messages.length - 1].id === messageId;
 
       return (
-        <div key={key} className="pt-2">
+        <div key={key}>
           <SearchPlacesToolCard
             toolKey={toolKey}
             places={places}

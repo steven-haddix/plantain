@@ -9,6 +9,7 @@ import { PlaceDetailsPanel } from "@/components/place-details-panel";
 import { TravelAgent } from "@/components/travel-agent";
 import { TripsModal } from "@/components/trips-modal";
 import { ItineraryRail } from "@/components/itinerary/itinerary-rail";
+import { SavedLocationsRail } from "@/components/saved-locations-rail";
 import {
   ResizableHandle,
   ResizablePanel,
@@ -90,11 +91,14 @@ export default function Dashboard() {
             <LeafletMap />
             <PlaceDetailsPanel />
             {activeTrip ? (
-              <ItineraryRail
-                tripId={activeTrip.id}
-                startDate={activeTrip.startDate}
-                endDate={activeTrip.endDate}
-              />
+              <>
+                <ItineraryRail
+                  tripId={activeTrip.id}
+                  startDate={activeTrip.startDate}
+                  endDate={activeTrip.endDate}
+                />
+                <SavedLocationsRail tripId={activeTrip.id} />
+              </>
             ) : null}
           </div>
         </ResizablePanel>

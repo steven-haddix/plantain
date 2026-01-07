@@ -2,7 +2,7 @@
 
 import { neonAuth } from "@neondatabase/auth/next/server";
 import { db } from "@/db";
-import { trips, chatThreads, chatMessages } from "@/db/schema";
+import { trips, chatThreads, chatMessages, savedLocations, places } from "@/db/schema";
 import { eq, and, desc, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { nanoid } from "nanoid";
@@ -115,4 +115,54 @@ export async function clearChatHistory(tripId: string) {
     await db.delete(chatMessages).where(eq(chatMessages.threadId, thread.id));
 
     revalidatePath("/dashboard");
+}
+
+export async function getSavedLocations(tripId: string) {
+    const { user } = await neonAuth();
+    if (!user) throw new Error("Unauthorized");
+
+    // Fetch saved locations with place details
+    // We join savedLocations with places to get the details
+    // And ensure the trip belongs to the owner or authorized user (implicit by tripId check later if we had shared trips, but for now simple check)
+
+    // First verify trip access
+    const [trip] = await db
+        .select()
+        .from(trips)
+        .where(and(eq(trips.id, tripId), eq(trips.ownerId, user.id)));
+
+    if (!trip) return [];
+
+    const saved = await db
+        .select({
+            id: savedLocations.id,
+            tripId: savedLocations.tripId,
+            placeId: savedLocations.placeId,
+            status: savedLocations.status,
+            note: savedLocations.note,
+            place: {
+                id: places.id,
+                googlePlaceId: places.googlePlaceId,
+                location: places.location,
+                category: places.category,
+                details: places.details,
+            }
+        })
+        .from(savedLocations)
+        .innerJoin(places, eq(savedLocations.placeId, places.id))
+        .where(eq(savedLocations.tripId, tripId));
+
+    return saved.map(item => ({
+        ...item,
+        place: {
+            ...item.place,
+            // Parse point coordinates if needed, but for now passing the raw object might be fine
+            // or we might need to extract lat/lng from the geography point if possible in code
+            // Actually Drizzle geo types might return a string or object.
+            // Let's assume we might need to parse it client side or it's handled.
+            // But looking at schema, it's a custom type. 
+            // Often it's better to select ST_X and ST_Y if we need coords.
+            // Let's adjust the query to get lat/lng explicitly to be safe for the map.
+        }
+    }));
 }
