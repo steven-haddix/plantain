@@ -3,6 +3,7 @@ import { neonAuth } from "@neondatabase/auth/next/server";
 import {
     createAgentUIStreamResponse,
     createIdGenerator,
+    generateText,
     ToolLoopAgent,
     tool,
 } from "ai";
@@ -21,6 +22,7 @@ import {
 import { placesService } from "@/lib/places-search/service";
 import { tripService } from "@/lib/trips/service";
 import { webSearchService } from "@/lib/web-search/service";
+import { scrapeUrl } from "@/lib/web-scrape/cheerio-scraper";
 
 export const maxDuration = 60;
 // Force rebuild: 2026-01-03
@@ -145,6 +147,11 @@ Help the user with their travel planning. You can:
 4. Manage saved locations: add new ones from search results, update notes/status of existing ones, or remove them.
 5. Manage itinerary items: create, list, update, or remove itinerary events.
 
+**Travel Tools:**
+- Use the "Web Search" tool to search for information about a location.
+- Use the "Scrape URL" tool to scrape a specific web page to extract information or read its content.
+   - If search results are not helpful, use the "Scrape URL" tool to scrape the page.
+
 **Tone:**
 Professional, enthusiastic, helpful, and concise.
 `;
@@ -232,6 +239,53 @@ Professional, enthusiastic, helpful, and concise.
                         return { results: organicResults.slice(0, 5) };
                     },
                 }),
+                scrapeUrl: tool({
+                    description:
+                        "Scrape a specific web page to extract information or read its content.",
+                    inputSchema: z.object({
+                        url: z.string().describe("The URL to scrape"),
+                        instruction: z
+                            .string()
+                            .optional()
+                            .describe(
+                                "Specific instructions on what to look for or extract (e.g., 'Find the vegetarian options')",
+                            ),
+                    }),
+                    execute: async ({ url, instruction }) => {
+                        const { title, content, error } = await scrapeUrl(url);
+
+                        if (error) {
+                            return { output: `Failed to load page: ${error}` };
+                        }
+
+                        if (instruction) {
+                            try {
+                                const { text } = await generateText({
+                                    model: "google/gemini-1.5-flash",
+                                    prompt: `
+You are a helpful assistant.
+Context: The user wants to find information on a webpage.
+Instruction: ${instruction}
+Webpage Title: ${title}
+Webpage Content:
+${content.slice(0, 20000)}
+
+Please extract the requested information or answer the question based on the content above.
+`,
+                                });
+                                return { output: text };
+                            } catch (err) {
+                                return {
+                                    output: `Loaded page "${title}" but failed to process instruction: ${err}`,
+                                };
+                            }
+                        }
+
+                        return {
+                            output: `Page: ${title}\nContent:\n${content.slice(0, 5000)}...`,
+                        };
+                    },
+                }),
                 createSavedLocation: tool({
                     description: "Add a location to the trip's saved list.",
                     inputSchema: z.object({
@@ -264,6 +318,10 @@ Professional, enthusiastic, helpful, and concise.
                                         name: input.name,
                                         formatted_address: input.address,
                                     },
+                                })
+                                .onConflictDoUpdate({
+                                    target: places.googlePlaceId,
+                                    set: { googlePlaceId: input.googlePlaceId },
                                 })
                                 .returning();
                         }
@@ -450,6 +508,10 @@ Professional, enthusiastic, helpful, and concise.
                                                 ...details,
                                             },
                                         })
+                                        .onConflictDoUpdate({
+                                            target: places.googlePlaceId,
+                                            set: { googlePlaceId: input.googlePlaceId },
+                                        })
                                         .returning();
                                 } catch (err) {
                                     console.error("Failed to fetch/create place details:", err);
@@ -555,6 +617,10 @@ Professional, enthusiastic, helpful, and concise.
                                                 formatted_address: address,
                                                 ...details,
                                             },
+                                        })
+                                        .onConflictDoUpdate({
+                                            target: places.googlePlaceId,
+                                            set: { googlePlaceId: googlePlaceId },
                                         })
                                         .returning();
                                 } catch (err) {
