@@ -1,12 +1,14 @@
 "use client";
 
-import { MapPin, X } from "lucide-react";
+import { MapPin, X, Zap } from "lucide-react";
 import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
-import useSWR from "swr";
+import { useTransition } from "react";
+import { toast } from "sonner";
+import useSWR, { mutate } from "swr";
+import { getSavedLocations, toggleSavedLocation } from "@/app/actions/trips";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Skeleton } from "@/components/ui/skeleton";
 import {
   Carousel,
   CarouselContent,
@@ -14,7 +16,16 @@ import {
   CarouselNext,
   CarouselPrevious,
 } from "@/components/ui/carousel";
-import { fetchPlaceDetails, fetchPlacePhotos, placeDetailsUrl, placePhotosUrl, type PlacePhoto } from "@/lib/place-details";
+import { Skeleton } from "@/components/ui/skeleton";
+import {
+  fetchPlaceDetails,
+  fetchPlacePhotos,
+  type PlacePhoto,
+  placeDetailsUrl,
+  placePhotosUrl,
+} from "@/lib/place-details";
+import { useAppStore } from "@/lib/store";
+import { cn } from "@/lib/utils";
 
 export function PlaceDetailsPanel() {
   const router = useRouter();
@@ -35,6 +46,17 @@ export function PlaceDetailsPanel() {
 
   const place = data?.place;
   const photos = photosData?.photos || (place?.photos ? place.photos : []);
+  const activeTrip = useAppStore((state) => state.activeTrip);
+  const [isPending, startTransition] = useTransition();
+
+  const { data: savedLocations } = useSWR(
+    activeTrip?.id ? ["saved-locations", activeTrip.id] : null,
+    () => getSavedLocations(activeTrip!.id),
+  );
+
+  const isSaved = savedLocations?.some(
+    (loc) => loc.place.googlePlaceId === placeId,
+  );
 
   if (!placeId) return null;
 
@@ -107,8 +129,14 @@ export function PlaceDetailsPanel() {
                 </CarouselContent>
                 {photos.length > 1 && (
                   <>
-                    <CarouselPrevious variant="secondary" className="left-2 top-1/2 -translate-y-1/2 bg-background/60 opacity-0 shadow-md transition-opacity group-hover:opacity-100 disabled:opacity-0" />
-                    <CarouselNext variant="secondary" className="right-2 top-1/2 -translate-y-1/2 bg-background/60 opacity-0 shadow-md transition-opacity group-hover:opacity-100 disabled:opacity-0" />
+                    <CarouselPrevious
+                      variant="secondary"
+                      className="left-2 top-1/2 -translate-y-1/2 bg-background/60 opacity-0 shadow-md transition-opacity group-hover:opacity-100 disabled:opacity-0"
+                    />
+                    <CarouselNext
+                      variant="secondary"
+                      className="right-2 top-1/2 -translate-y-1/2 bg-background/60 opacity-0 shadow-md transition-opacity group-hover:opacity-100 disabled:opacity-0"
+                    />
                   </>
                 )}
               </Carousel>
@@ -128,28 +156,66 @@ export function PlaceDetailsPanel() {
           </div>
 
           {place?.address || placeId ? (
-            <div className="flex items-center justify-between gap-4">
+            <div className="flex flex-col gap-4">
               {place?.address && (
                 <div className="min-w-0">
                   <div className="text-xs font-medium text-muted-foreground">
                     Address
                   </div>
-                  <div className="truncate text-sm">{place.address}</div>
+                  <div className="text-sm">{place.address}</div>
                 </div>
               )}
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-8 shrink-0 gap-1.5 text-xs"
-                onClick={() => {
-                  const query = encodeURIComponent(place?.name || placeId);
-                  const url = `https://www.google.com/maps/search/?api=1&query=${query}&query_place_id=${placeId}`;
-                  window.open(url, "_blank", "noopener,noreferrer");
-                }}
-              >
-                <MapPin className="size-3.5" />
-                Google Map
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-8 shrink-0 gap-1.5 text-xs"
+                  onClick={() => {
+                    const query = encodeURIComponent(place?.name || placeId);
+                    const url = `https://www.google.com/maps/search/?api=1&query=${query}&query_place_id=${placeId}`;
+                    window.open(url, "_blank", "noopener,noreferrer");
+                  }}
+                >
+                  <MapPin className="size-3.5" />
+                  Google Map
+                </Button>
+                <Button
+                  variant={isSaved ? "secondary" : "default"}
+                  size="sm"
+                  className="h-8 shrink-0 gap-1.5 text-xs transition-all"
+                  disabled={!activeTrip || isPending}
+                  onClick={() => {
+                    if (!activeTrip || !place) return;
+
+                    startTransition(async () => {
+                      try {
+                        const result = await toggleSavedLocation(
+                          activeTrip.id,
+                          {
+                            ...place,
+                            googlePlaceId: placeId,
+                          },
+                        );
+
+                        // Re-fetch saved locations to update UI state immediately
+                        mutate(["saved-locations", activeTrip.id]);
+
+                        if (result.saved) {
+                          toast.success("Saved to interested places");
+                        } else {
+                          toast.success("Removed from interested places");
+                        }
+                      } catch (err) {
+                        console.error("Failed to toggle save:", err);
+                        toast.error("Failed to save location");
+                      }
+                    });
+                  }}
+                >
+                  <Zap className={cn("size-3.5", isSaved && "fill-current")} />
+                  {isSaved ? "Saved" : "Interested"}
+                </Button>
+              </div>
             </div>
           ) : null}
 

@@ -261,7 +261,7 @@ Professional, enthusiastic, helpful, and concise.
                         if (instruction) {
                             try {
                                 const { text } = await generateText({
-                                    model: "google/gemini-1.5-flash",
+                                    model: "google/gemini-3-flash",
                                     prompt: `
 You are a helpful assistant.
 Context: The user wants to find information on a webpage.

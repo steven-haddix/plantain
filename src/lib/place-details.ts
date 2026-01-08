@@ -11,6 +11,9 @@ export type PlaceDetails = {
   reviewsCount?: number;
   address?: string;
   photos?: PlacePhoto[];
+  googlePlaceId?: string;
+  latitude?: number;
+  longitude?: number;
 };
 
 export type PlaceDetailsResponse = { place: PlaceDetails | null };

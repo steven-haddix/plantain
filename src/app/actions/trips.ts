@@ -1,24 +1,89 @@
 "use server";
 
+import type { GoogleGenerativeAIProviderOptions } from "@ai-sdk/google";
 import { neonAuth } from "@neondatabase/auth/next/server";
-import { db } from "@/db";
-import { trips, chatThreads, chatMessages, savedLocations, places } from "@/db/schema";
-import { eq, and, desc, sql } from "drizzle-orm";
-import { revalidatePath } from "next/cache";
+import { generateText, Output } from "ai";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
+import { revalidatePath } from "next/cache";
+import { z } from "zod";
+import { db } from "@/db";
+import {
+    chatMessages,
+    chatThreads,
+    places,
+    savedLocations,
+    trips,
+} from "@/db/schema";
 import { CHAT_HISTORY_LIMIT } from "@/lib/constants";
+import type { PlaceDetails } from "@/lib/place-details";
+
+const PLACE_CATEGORIES = [
+    "restaurant",
+    "hotel",
+    "attraction",
+    "airport",
+    "bar",
+    "cafe",
+    "park",
+    "museum",
+    "shopping",
+    "transport",
+    "activity",
+    "other",
+] as const;
+
+type PlaceCategory = (typeof PLACE_CATEGORIES)[number];
+
+const classifyPlaceCategory = async (
+    placeData: PlaceDetails,
+): Promise<PlaceCategory> => {
+    const details = [
+        placeData.name ? `Name: ${placeData.name}` : null,
+        placeData.category ? `Category hint: ${placeData.category}` : null,
+        placeData.address ? `Address: ${placeData.address}` : null,
+    ]
+        .filter(Boolean)
+        .join("\n");
+
+    try {
+        const { output } = await generateText({
+            model: "google/gemini-3-flash",
+            output: Output.object({
+                schema: z.object({
+                    category: z.enum(PLACE_CATEGORIES),
+                }),
+            }),
+            prompt: `Choose exactly one category for this place:
+${details || "No additional info provided."}`,
+            providerOptions: {
+                google: {
+                    thinkingConfig: {
+                        thinkingLevel: "minimal",
+                        includeThoughts: false,
+                    },
+                } satisfies GoogleGenerativeAIProviderOptions,
+            },
+        });
+        return output.category;
+    } catch (error) {
+        console.error("Failed to classify place category:", error);
+        return "other";
+    }
+};
 
 export async function getTrips() {
     const { user } = await neonAuth();
     if (!user) throw new Error("Unauthorized");
 
-    return await db
-        .select()
-        .from(trips)
-        .where(eq(trips.ownerId, user.id));
+    return await db.select().from(trips).where(eq(trips.ownerId, user.id));
 }
 
-export async function createTrip(title: string, startDate?: Date, endDate?: Date) {
+export async function createTrip(
+    title: string,
+    startDate?: Date,
+    endDate?: Date,
+) {
     const { user } = await neonAuth();
     if (!user) throw new Error("Unauthorized");
 
@@ -37,7 +102,10 @@ export async function createTrip(title: string, startDate?: Date, endDate?: Date
     return newTrip;
 }
 
-export async function updateTrip(id: string, updates: { title?: string; startDate?: Date | null; endDate?: Date | null }) {
+export async function updateTrip(
+    id: string,
+    updates: { title?: string; startDate?: Date | null; endDate?: Date | null },
+) {
     const { user } = await neonAuth();
     if (!user) throw new Error("Unauthorized");
 
@@ -45,22 +113,29 @@ export async function updateTrip(id: string, updates: { title?: string; startDat
         .update(trips)
         .set({
             title: updates.title,
-            startDate: updates.startDate ? updates.startDate.toISOString() : updates.startDate === null ? null : undefined,
-            endDate: updates.endDate ? updates.endDate.toISOString() : updates.endDate === null ? null : undefined,
+            startDate: updates.startDate
+                ? updates.startDate.toISOString()
+                : updates.startDate === null
+                    ? null
+                    : undefined,
+            endDate: updates.endDate
+                ? updates.endDate.toISOString()
+                : updates.endDate === null
+                    ? null
+                    : undefined,
         })
-        .where(
-            and(
-                eq(trips.id, id),
-                eq(trips.ownerId, user.id)
-            )
-        )
+        .where(and(eq(trips.id, id), eq(trips.ownerId, user.id)))
         .returning();
 
     revalidatePath("/dashboard");
     return updatedTrip;
 }
 
-export async function getChatMessages(tripId: string, limit: number = CHAT_HISTORY_LIMIT, cursor?: string) {
+export async function getChatMessages(
+    tripId: string,
+    limit: number = CHAT_HISTORY_LIMIT,
+    cursor?: string,
+) {
     const { user } = await neonAuth();
     if (!user) throw new Error("Unauthorized");
 
@@ -68,14 +143,18 @@ export async function getChatMessages(tripId: string, limit: number = CHAT_HISTO
     const [thread] = await db
         .select()
         .from(chatThreads)
-        .where(and(eq(chatThreads.tripId, tripId), eq(chatThreads.userId, user.id)));
+        .where(
+            and(eq(chatThreads.tripId, tripId), eq(chatThreads.userId, user.id)),
+        );
 
     if (!thread) return { messages: [], hasMore: false };
 
     // Fetch messages for this thread
     const conditions = [eq(chatMessages.threadId, thread.id)];
     if (cursor) {
-        conditions.push(sql`${chatMessages.createdAt} < ${new Date(cursor).toISOString()}`);
+        conditions.push(
+            sql`${chatMessages.createdAt} < ${new Date(cursor).toISOString()}`,
+        );
     }
 
     const messages = await db
@@ -107,7 +186,9 @@ export async function clearChatHistory(tripId: string) {
     const [thread] = await db
         .select()
         .from(chatThreads)
-        .where(and(eq(chatThreads.tripId, tripId), eq(chatThreads.userId, user.id)));
+        .where(
+            and(eq(chatThreads.tripId, tripId), eq(chatThreads.userId, user.id)),
+        );
 
     if (!thread) return;
 
@@ -146,23 +227,89 @@ export async function getSavedLocations(tripId: string) {
                 location: places.location,
                 category: places.category,
                 details: places.details,
-            }
+            },
         })
         .from(savedLocations)
         .innerJoin(places, eq(savedLocations.placeId, places.id))
         .where(eq(savedLocations.tripId, tripId));
 
-    return saved.map(item => ({
+    return saved.map((item) => ({
         ...item,
         place: {
             ...item.place,
-            // Parse point coordinates if needed, but for now passing the raw object might be fine
-            // or we might need to extract lat/lng from the geography point if possible in code
-            // Actually Drizzle geo types might return a string or object.
-            // Let's assume we might need to parse it client side or it's handled.
-            // But looking at schema, it's a custom type. 
-            // Often it's better to select ST_X and ST_Y if we need coords.
-            // Let's adjust the query to get lat/lng explicitly to be safe for the map.
-        }
+        },
     }));
+}
+
+export async function toggleSavedLocation(
+    tripId: string,
+    placeData: PlaceDetails,
+) {
+    const { user } = await neonAuth();
+    if (!user) throw new Error("Unauthorized");
+
+    if (!placeData.googlePlaceId) throw new Error("Missing Google Place ID");
+
+    // 1. Ensure place exists in database
+    let [place] = await db
+        .select()
+        .from(places)
+        .where(eq(places.googlePlaceId, placeData.googlePlaceId));
+
+    if (!place) {
+        // Create new place
+        if (!placeData.latitude || !placeData.longitude) {
+            throw new Error("Missing coordinates for new place");
+        }
+
+        const category = await classifyPlaceCategory(placeData);
+
+        [place] = await db
+            .insert(places)
+            .values({
+                id: nanoid(),
+                googlePlaceId: placeData.googlePlaceId,
+                location: sql`ST_SetSRID(ST_MakePoint(${placeData.longitude}, ${placeData.latitude}), 4326)`,
+                category: category,
+                details: placeData,
+            })
+            .onConflictDoUpdate({
+                target: places.googlePlaceId,
+                set: {
+                    // Update details if they changed
+                    details: placeData,
+                },
+            })
+            .returning();
+    }
+
+    // 2. Check if already saved
+    const [existing] = await db
+        .select()
+        .from(savedLocations)
+        .where(
+            and(
+                eq(savedLocations.tripId, tripId),
+                eq(savedLocations.placeId, place.id),
+            ),
+        );
+
+    if (existing) {
+        // Toggle OFF: Delete
+        await db.delete(savedLocations).where(eq(savedLocations.id, existing.id));
+
+        revalidatePath("/dashboard");
+        return { saved: false };
+    } else {
+        // Toggle ON: Insert
+        await db.insert(savedLocations).values({
+            id: nanoid(),
+            tripId,
+            placeId: place.id,
+            status: "interested",
+        });
+
+        revalidatePath("/dashboard");
+        return { saved: true };
+    }
 }
