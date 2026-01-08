@@ -65,6 +65,17 @@ const getStatusBadge = (status: ToolUIPart["state"]) => {
   );
 };
 
+const formatToolName = (type: string) => {
+  // Remove "tool-" prefix if present (e.g. "tool-createItineraryEvent" -> "createItineraryEvent")
+  const name = type.startsWith("tool-") ? type.slice(5) : type;
+
+  // Split camelCase (e.g. "createItineraryEvent" -> "create Itinerary Event")
+  const withSpaces = name.replace(/([A-Z])/g, " $1");
+
+  // Capitalize first letter and trim (e.g. "Create Itinerary Event")
+  return (withSpaces.charAt(0).toUpperCase() + withSpaces.slice(1)).trim();
+};
+
 export const ToolHeader = ({
   className,
   title,
@@ -82,7 +93,7 @@ export const ToolHeader = ({
     <div className="flex items-center gap-2">
       <WrenchIcon className="size-4 text-muted-foreground" />
       <span className="font-medium text-sm">
-        {title ?? type.split("-").slice(1).join("-")}
+        {title ?? formatToolName(type)}
       </span>
       {getStatusBadge(state)}
     </div>
