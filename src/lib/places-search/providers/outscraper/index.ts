@@ -76,7 +76,7 @@ export class OutscraperProvider implements PlacesSearchProvider {
         });
 
         const response = await fetch(
-            `${this.baseUrl}/maps/photos-v3?${queryParams.toString()}`,
+            `${this.baseUrl}/google-maps-photos?${queryParams.toString()}`,
             {
                 method: "GET",
                 headers: {

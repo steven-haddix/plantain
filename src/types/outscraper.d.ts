@@ -156,6 +156,24 @@ declare module "outscraper" {
         related_questions?: OutscraperRelatedQuestion[];
     }
 
+    export interface OutscraperGeocodingResponse {
+        query: string;
+        latitude: number;
+        longitude: number;
+        country?: string;
+        state?: string;
+        city?: string;
+        borough?: string;
+        street?: string;
+        postal_code?: string;
+        time_zone?: string;
+        street_view?: string;
+        formatted_address?: string; // For reverse geocoding
+        place_id?: string;
+        address_components?: any[];
+        types?: string[];
+    }
+
     class Outscraper {
         constructor(apiKey: string);
 
@@ -250,6 +268,26 @@ declare module "outscraper" {
             domains: string[],
             async?: boolean
         ): Promise<OutscraperEmailsContact[]>;
+
+        /**
+         * Geocoding
+         * @param query Address to geocode
+         * @param asyncRequest Whether to execute the request asynchronously
+         */
+        geocoding(
+            query: string | string[],
+            asyncRequest?: boolean
+        ): Promise<OutscraperGeocodingResponse[]>;
+
+        /**
+         * Reverse Geocoding
+         * @param query Coordinates to reverse geocode (lat,lng)
+         * @param asyncRequest Whether to execute the request asynchronously
+         */
+        reverseGeocoding(
+            query: string | string[],
+            asyncRequest?: boolean
+        ): Promise<OutscraperGeocodingResponse[]>;
     }
 
     export default Outscraper;
