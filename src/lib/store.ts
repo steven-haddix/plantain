@@ -1,19 +1,25 @@
 import { create } from "zustand";
-import { persist, createJSONStorage } from "zustand/middleware";
+import { createJSONStorage, persist } from "zustand/middleware";
+import type { ChatMessage } from "@/db/schema";
 
 interface Trip {
   id: string;
   title: string | null;
   startDate: string | null;
   endDate: string | null;
-  chatMessages?: any[];
+  destinationLocation?: { latitude: number; longitude: number } | null;
+  chatMessages?: ChatMessage[];
   hasMoreMessages?: boolean;
 }
 
 interface AppState {
   activeTrip: Trip | null;
   setActiveTrip: (trip: Trip | null) => void;
-  prependMessages: (tripId: string, messages: any[], hasMore: boolean) => void;
+  prependMessages: (
+    tripId: string,
+    messages: ChatMessage[],
+    hasMore: boolean,
+  ) => void;
   clearMessages: (tripId: string) => void;
 }
 
@@ -28,7 +34,10 @@ export const useAppStore = create<AppState>()(
           return {
             activeTrip: {
               ...state.activeTrip,
-              chatMessages: [...messages, ...(state.activeTrip.chatMessages || [])],
+              chatMessages: [
+                ...messages,
+                ...(state.activeTrip.chatMessages || []),
+              ],
               hasMoreMessages: hasMore,
             },
           };

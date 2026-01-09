@@ -4,12 +4,12 @@ import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { mutate } from "swr";
-import { getTrips, getChatMessages } from "@/app/actions/trips";
+import { getChatMessages, getTrips } from "@/app/actions/trips";
+import { ItineraryRail } from "@/components/itinerary/itinerary-rail";
 import { PlaceDetailsPanel } from "@/components/place-details-panel";
+import { SavedLocationsRail } from "@/components/saved-locations-rail";
 import { TravelAgent } from "@/components/travel-agent";
 import { TripsModal } from "@/components/trips-modal";
-import { ItineraryRail } from "@/components/itinerary/itinerary-rail";
-import { SavedLocationsRail } from "@/components/saved-locations-rail";
 import {
   ResizableHandle,
   ResizablePanel,
@@ -38,13 +38,17 @@ export default function Dashboard() {
   useEffect(() => {
     const tripId = activeTrip?.id;
     if (tripId && !isPending && data?.session) {
-      Promise.all([getTrips(), getChatMessages(tripId)]).then(
-        ([trips, chatData]) => {
-          const chatDataObj = chatData as any;
-          const messages = Array.isArray(chatDataObj) ? chatDataObj : (chatDataObj?.messages || []);
-          const hasMore = Array.isArray(chatDataObj) ? false : !!chatDataObj?.hasMore;
+      Promise.all([getTrips(), getChatMessages(tripId)])
+        .then(([trips, chatData]) => {
+          const chatDataObj = chatData;
+          const messages = Array.isArray(chatDataObj)
+            ? chatDataObj
+            : chatDataObj?.messages || [];
+          const hasMore = Array.isArray(chatDataObj)
+            ? false
+            : !!chatDataObj?.hasMore;
 
-          const freshTrip = (trips as any[]).find((t) => t.id === tripId);
+          const freshTrip = trips.find((t) => t.id === tripId);
           if (!freshTrip) {
             setActiveTrip(null);
           } else {
@@ -53,7 +57,8 @@ export default function Dashboard() {
               freshTrip.title !== activeTrip?.title ||
               freshTrip.startDate !== activeTrip?.startDate ||
               freshTrip.endDate !== activeTrip?.endDate ||
-              JSON.stringify(messages) !== JSON.stringify(activeTrip?.chatMessages) ||
+              JSON.stringify(messages) !==
+              JSON.stringify(activeTrip?.chatMessages) ||
               hasMore !== activeTrip?.hasMoreMessages;
 
             if (hasChanged) {
@@ -64,10 +69,10 @@ export default function Dashboard() {
               });
             }
           }
-        },
-      ).catch(err => {
-        console.error("Failed to sync trip data:", err);
-      });
+        })
+        .catch((err) => {
+          console.error("Failed to sync trip data:", err);
+        });
     }
     // Only run on trip change or session load
   }, [activeTrip?.id, isPending, data?.user?.id, setActiveTrip]);
@@ -112,11 +117,16 @@ export default function Dashboard() {
               trip={activeTrip}
               onTripChange={() => {
                 // Refresh itinerary data
-                mutate(`/api/trips/${encodeURIComponent(activeTrip.id)}/itinerary`);
+                mutate(
+                  `/api/trips/${encodeURIComponent(activeTrip.id)}/itinerary`,
+                );
                 // Also refresh trip details/messages if needed
-                getTrips().then(trips => {
-                  const fresh = trips.find(t => t.id === activeTrip.id);
-                  if (fresh) useAppStore.getState().setActiveTrip({ ...activeTrip, ...fresh });
+                getTrips().then((trips) => {
+                  const fresh = trips.find((t) => t.id === activeTrip.id);
+                  if (fresh)
+                    useAppStore
+                      .getState()
+                      .setActiveTrip({ ...activeTrip, ...fresh });
                 });
               }}
             />

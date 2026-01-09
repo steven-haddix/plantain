@@ -558,7 +558,7 @@ export function TravelAgent({ tripId, trip, onTripChange }: TravelAgentProps) {
           <div className="space-y-0.5">
             <h3 className="text-sm font-semibold">Travel Agent</h3>
             <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-              <span className="max-w-[180px] truncate">
+              <span className="max-w-45 truncate">
                 {trip?.title ?? "Current Trip"}
               </span>
               {trip?.startDate && (

@@ -1,30 +1,154 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { format } from "date-fns";
+import {
+    Calendar as CalendarIcon,
+    ChevronsUpDown,
+    Loader2,
+    MapPin,
+    Pencil,
+    Plane,
+} from "lucide-react";
+import { AnimatePresence, motion } from "motion/react";
+import { useEffect, useState } from "react";
+import type { DateRange } from "react-day-picker";
+import { toast } from "sonner";
+import {
+    createTrip,
+    getTrips,
+    searchPlaces,
+    updateTrip,
+} from "@/app/actions/trips";
+import { Button } from "@/components/ui/button";
+import { Calendar } from "@/components/ui/calendar";
+import {
+    Command,
+    CommandEmpty,
+    CommandGroup,
+    CommandInput,
+    CommandItem,
+    CommandList,
+} from "@/components/ui/command";
 import {
     Dialog,
     DialogContent,
     DialogHeader,
     DialogTitle,
 } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { getTrips, createTrip, updateTrip } from "@/app/actions/trips";
-import { toast } from "sonner";
-import { Plus, Plane, Calendar as CalendarIcon, Pencil, X, Check } from "lucide-react";
-import { motion, AnimatePresence } from "motion/react";
-import { Calendar } from "@/components/ui/calendar";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { format } from "date-fns";
+import {
+    Popover,
+    PopoverContent,
+    PopoverTrigger,
+} from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
-import { DateRange } from "react-day-picker";
 
 interface Trip {
     id: string;
     title: string | null;
     startDate: string | null;
     endDate: string | null;
+    destinationLocation?: { latitude: number; longitude: number } | null;
+}
+
+// ... existing TripsModal component ...
+
+function LocationSearch({
+    onSelect,
+    defaultValue,
+}: {
+    onSelect: (location: { latitude: number; longitude: number } | null) => void;
+    defaultValue?: { latitude: number; longitude: number } | null;
+}) {
+    const [open, setOpen] = useState(false);
+    const [query, setQuery] = useState("");
+    const [results, setResults] = useState<any[]>([]);
+    const [loading, setLoading] = useState(false);
+    const [selectedName, setSelectedName] = useState("");
+
+    useEffect(() => {
+        if (!query) {
+            setResults([]);
+            return;
+        }
+
+        const timer = setTimeout(async () => {
+            setLoading(true);
+            try {
+                const data = await searchPlaces(query);
+                setResults(data);
+            } catch (error) {
+                console.error(error);
+            } finally {
+                setLoading(false);
+            }
+        }, 500);
+
+        return () => clearTimeout(timer);
+    }, [query]);
+
+    return (
+        <Popover open={open} onOpenChange={setOpen}>
+            <PopoverTrigger asChild>
+                <Button
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={open}
+                    className="w-full justify-between bg-white/5 border-white/10 hover:bg-white/10"
+                >
+                    {selectedName ||
+                        (defaultValue ? "Location set" : "Select location...")}
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-100 p-0">
+                <Command shouldFilter={false}>
+                    <CommandInput
+                        placeholder="Search for a city..."
+                        value={query}
+                        onValueChange={setQuery}
+                    />
+                    <CommandList>
+                        {loading && (
+                            <div className="p-4 text-center text-sm text-muted-foreground">
+                                <Loader2 className="mr-2 h-4 w-4 animate-spin inline" />{" "}
+                                Searching...
+                            </div>
+                        )}
+                        {!loading && results.length === 0 && (
+                            <CommandEmpty>No results found.</CommandEmpty>
+                        )}
+                        <CommandGroup>
+                            {results.map((result, index) => (
+                                <CommandItem
+                                    key={`${result.placeId}-${index}`}
+                                    value={result.formattedAddress}
+                                    onSelect={() => {
+                                        onSelect({
+                                            latitude: result.latitude,
+                                            longitude: result.longitude,
+                                        });
+                                        setSelectedName(result.city || result.formattedAddress);
+                                        setOpen(false);
+                                    }}
+                                >
+                                    <MapPin className="mr-2 h-4 w-4" />
+                                    <span>{result.formattedAddress}</span>
+                                    {/* <Check
+                                        className={cn(
+                                            "ml-auto h-4 w-4",
+                                            value === framework.value ? "opacity-100" : "opacity-0"
+                                        )}
+                                    /> */}
+                                </CommandItem>
+                            ))}
+                        </CommandGroup>
+                    </CommandList>
+                </Command>
+            </PopoverContent>
+        </Popover>
+    );
 }
 
 export function TripsModal({
@@ -40,12 +164,20 @@ export function TripsModal({
     const [loading, setLoading] = useState(true);
     const [newTripName, setNewTripName] = useState("");
     const [newTripDate, setNewTripDate] = useState<DateRange | undefined>();
+    const [newTripLocation, setNewTripLocation] = useState<{
+        latitude: number;
+        longitude: number;
+    } | null>(null);
     const [isCreating, setIsCreating] = useState(false);
 
     // Editing state
     const [editingTripId, setEditingTripId] = useState<string | null>(null);
     const [editName, setEditName] = useState("");
     const [editDate, setEditDate] = useState<DateRange | undefined>();
+    const [editLocation, setEditLocation] = useState<{
+        latitude: number;
+        longitude: number;
+    } | null>(null);
     const [isUpdating, setIsUpdating] = useState(false);
 
     useEffect(() => {
@@ -75,11 +207,13 @@ export function TripsModal({
             const newTrip = await createTrip(
                 newTripName,
                 newTripDate?.from,
-                newTripDate?.to
+                newTripDate?.to,
+                newTripLocation || undefined,
             );
             toast.success("Trip created successfully!");
             setNewTripName("");
             setNewTripDate(undefined);
+            setNewTripLocation(null);
             onSelect(newTrip);
         } catch (error) {
             toast.error("Failed to create trip");
@@ -97,6 +231,7 @@ export function TripsModal({
                 title: editName,
                 startDate: editDate?.from || null,
                 endDate: editDate?.to || null,
+                destination: editLocation,
             });
 
             toast.success("Trip updated successfully!");
@@ -112,9 +247,14 @@ export function TripsModal({
     function startEditing(trip: Trip) {
         setEditingTripId(trip.id);
         setEditName(trip.title || "");
+        setEditComponentDate(trip.startDate, trip.endDate);
+        setEditLocation(trip.destinationLocation || null);
+    }
+
+    function setEditComponentDate(start: string | null, end: string | null) {
         setEditDate({
-            from: trip.startDate ? new Date(trip.startDate) : undefined,
-            to: trip.endDate ? new Date(trip.endDate) : undefined,
+            from: start ? new Date(start) : undefined,
+            to: end ? new Date(end) : undefined,
         });
     }
 
@@ -150,7 +290,10 @@ export function TripsModal({
                             >
                                 <div className="space-y-4">
                                     <div className="space-y-2">
-                                        <Label htmlFor="edit-name" className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                                        <Label
+                                            htmlFor="edit-name"
+                                            className="text-xs font-medium text-muted-foreground uppercase tracking-wider"
+                                        >
                                             Trip name
                                         </Label>
                                         <Input
@@ -164,6 +307,16 @@ export function TripsModal({
 
                                     <div className="space-y-2">
                                         <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                                            Location
+                                        </Label>
+                                        <LocationSearch
+                                            onSelect={setEditLocation}
+                                            defaultValue={editLocation}
+                                        />
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
                                             Dates
                                         </Label>
                                         <Popover>
@@ -172,7 +325,7 @@ export function TripsModal({
                                                     variant="outline"
                                                     className={cn(
                                                         "w-full justify-start text-left font-normal bg-white/5 border-white/10 hover:bg-white/10",
-                                                        !editDate && "text-muted-foreground"
+                                                        !editDate && "text-muted-foreground",
                                                     )}
                                                 >
                                                     <CalendarIcon className="mr-2 h-4 w-4" />
@@ -242,13 +395,21 @@ export function TripsModal({
                                             className="bg-white/5 border-white/10 focus:border-primary/50"
                                         />
                                         <div className="flex gap-2">
+                                            <div className="flex-1">
+                                                <LocationSearch
+                                                    onSelect={setNewTripLocation}
+                                                    defaultValue={newTripLocation}
+                                                />
+                                            </div>
+                                        </div>
+                                        <div className="flex gap-2">
                                             <Popover>
                                                 <PopoverTrigger asChild>
                                                     <Button
                                                         variant="outline"
                                                         className={cn(
                                                             "flex-1 justify-start text-left font-normal bg-white/5 border-white/10 hover:bg-white/10 overflow-hidden",
-                                                            !newTripDate && "text-muted-foreground"
+                                                            !newTripDate && "text-muted-foreground",
                                                         )}
                                                     >
                                                         <CalendarIcon className="mr-2 h-4 w-4 shrink-0" />
@@ -256,7 +417,8 @@ export function TripsModal({
                                                             {newTripDate?.from ? (
                                                                 newTripDate.to ? (
                                                                     <>
-                                                                        {format(newTripDate.from, "LLL dd")} - {format(newTripDate.to, "LLL dd")}
+                                                                        {format(newTripDate.from, "LLL dd")} -{" "}
+                                                                        {format(newTripDate.to, "LLL dd")}
                                                                     </>
                                                                 ) : (
                                                                     format(newTripDate.from, "LLL dd")
@@ -320,13 +482,27 @@ export function TripsModal({
                                                             <span className="font-semibold text-foreground group-hover:text-primary transition-colors">
                                                                 {trip.title || "Untitled Trip"}
                                                             </span>
-                                                            {(trip.startDate || trip.endDate) && (
-                                                                <span className="text-xs text-muted-foreground flex items-center gap-1">
-                                                                    <CalendarIcon className="w-3 h-3" />
-                                                                    {trip.startDate && format(new Date(trip.startDate), "LLL dd")}
-                                                                    {trip.endDate && ` - ${format(new Date(trip.endDate), "LLL dd, yyyy")}`}
-                                                                </span>
-                                                            )}
+                                                            <div className="text-xs text-muted-foreground flex items-center gap-1 flex-wrap">
+                                                                {(trip.startDate || trip.endDate) && (
+                                                                    <>
+                                                                        <CalendarIcon className="w-3 h-3" />
+                                                                        {trip.startDate &&
+                                                                            format(
+                                                                                new Date(trip.startDate),
+                                                                                "LLL dd",
+                                                                            )}
+                                                                        {trip.endDate &&
+                                                                            ` - ${format(new Date(trip.endDate), "LLL dd, yyyy")}`}
+                                                                    </>
+                                                                )}
+                                                                {trip.destinationLocation && (
+                                                                    <>
+                                                                        <div className="w-px h-3 bg-white/20 mx-1" />
+                                                                        <MapPin className="w-3 h-3" />
+                                                                        Location Set
+                                                                    </>
+                                                                )}
+                                                            </div>
                                                         </div>
                                                     </Button>
                                                     <Button

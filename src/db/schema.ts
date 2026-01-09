@@ -1,7 +1,7 @@
 import { sql } from "drizzle-orm";
 import {
-  check,
   boolean,
+  check,
   customType,
   date,
   integer,
@@ -58,16 +58,16 @@ export const trips = pgTable(
     title: text("title"),
     startDate: date("start_date"),
     endDate: date("end_date"),
-    destinationBbox: geometryPolygon("destination_bbox"),
+    destinationLocation: geographyPoint("destination_location"),
   },
   (table) => [
     check(
-      "trips_destination_bbox_is_polygon",
-      sql`ST_GeometryType(${table.destinationBbox}) = 'ST_Polygon'`,
+      "trips_destination_location_is_point",
+      sql`ST_GeometryType(${table.destinationLocation}::geometry) = 'ST_Point'`,
     ),
     check(
-      "trips_destination_bbox_srid",
-      sql`ST_SRID(${table.destinationBbox}) = 4326`,
+      "trips_destination_location_srid",
+      sql`ST_SRID(${table.destinationLocation}::geometry) = 4326`,
     ),
   ],
 );
@@ -94,8 +94,6 @@ export const places = pgTable(
     ),
   ],
 );
-
-
 
 export const savedLocationStatus = pgEnum("saved_location_status", [
   "interested",

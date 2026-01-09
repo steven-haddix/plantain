@@ -54,9 +54,21 @@ function createDayMarkerIcon(dayIndex: number) {
 function MapController({ places }: { places: MapPlace[] }) {
   const map = useMap();
   const selectedPlaceId = useMapStore((state) => state.selectedPlaceId);
+  const activeTrip = useAppStore((state) => state.activeTrip);
 
   useEffect(() => {
-    if (!selectedPlaceId) return;
+    if (!selectedPlaceId) {
+      // If no place is selected, but we have a trip destination, fly to it
+      // We only do this if we haven't selected a place, to avoid fighting for control
+      if (activeTrip?.destinationLocation) {
+        map.flyTo(
+          [activeTrip.destinationLocation.latitude, activeTrip.destinationLocation.longitude],
+          12, // Zoom level for a city/region overview
+          { animate: true, duration: 1.5 }
+        );
+      }
+      return;
+    }
 
     const place = places.find((p) => p.googlePlaceId === selectedPlaceId);
     if (place) {
@@ -65,7 +77,7 @@ function MapController({ places }: { places: MapPlace[] }) {
         duration: 1.5,
       });
     }
-  }, [map, selectedPlaceId, places]);
+  }, [map, selectedPlaceId, places, activeTrip?.destinationLocation]);
 
   return null;
 }

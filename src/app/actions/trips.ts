@@ -3,7 +3,7 @@
 import type { GoogleGenerativeAIProviderOptions } from "@ai-sdk/google";
 import { neonAuth } from "@neondatabase/auth/next/server";
 import { generateText, Output } from "ai";
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, getTableColumns, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
@@ -76,13 +76,52 @@ export async function getTrips() {
     const { user } = await neonAuth();
     if (!user) throw new Error("Unauthorized");
 
-    return await db.select().from(trips).where(eq(trips.ownerId, user.id));
+    const { destinationLocation, ...tripColumns } = getTableColumns(trips);
+
+    const tripsList = await db
+        .select({
+            ...tripColumns,
+            destinationLatitude: sql<number | null>`CASE
+      WHEN ${trips.destinationLocation} IS NULL THEN NULL
+      ELSE ST_Y(${trips.destinationLocation}::geometry)
+    END`.as("destination_latitude"),
+            destinationLongitude: sql<number | null>`CASE
+      WHEN ${trips.destinationLocation} IS NULL THEN NULL
+      ELSE ST_X(${trips.destinationLocation}::geometry)
+    END`.as("destination_longitude"),
+        })
+        .from(trips)
+        .where(eq(trips.ownerId, user.id));
+    console.log(tripsList);
+
+    return tripsList.map((t) => ({
+        ...t,
+        destinationLocation: {
+            latitude: t.destinationLatitude,
+            longitude: t.destinationLongitude,
+        } as { latitude: number; longitude: number } | null,
+    }));
+}
+
+// ... imports including Geocoding service
+import { geocodingService } from "@/lib/geocoding/service";
+
+// ... existing code ...
+
+export async function searchPlaces(query: string) {
+    const { user } = await neonAuth();
+    if (!user) throw new Error("Unauthorized");
+
+    // We accept both geocoding results and existing places for the dropdown if needed,
+    // but for now, let's just use the geocoding service to find locations.
+    return await geocodingService.geocode(query);
 }
 
 export async function createTrip(
     title: string,
     startDate?: Date,
     endDate?: Date,
+    destination?: { latitude: number; longitude: number },
 ) {
     const { user } = await neonAuth();
     if (!user) throw new Error("Unauthorized");
@@ -95,6 +134,9 @@ export async function createTrip(
             title,
             startDate: startDate ? startDate.toISOString() : null,
             endDate: endDate ? endDate.toISOString() : null,
+            destinationLocation: destination
+                ? sql`ST_SetSRID(ST_MakePoint(${destination.longitude}, ${destination.latitude}), 4326)`
+                : null,
         })
         .returning();
 
@@ -104,7 +146,12 @@ export async function createTrip(
 
 export async function updateTrip(
     id: string,
-    updates: { title?: string; startDate?: Date | null; endDate?: Date | null },
+    updates: {
+        title?: string;
+        startDate?: Date | null;
+        endDate?: Date | null;
+        destination?: { latitude: number; longitude: number } | null;
+    },
 ) {
     const { user } = await neonAuth();
     if (!user) throw new Error("Unauthorized");
@@ -121,6 +168,11 @@ export async function updateTrip(
             endDate: updates.endDate
                 ? updates.endDate.toISOString()
                 : updates.endDate === null
+                    ? null
+                    : undefined,
+            destinationLocation: updates.destination
+                ? sql`ST_SetSRID(ST_MakePoint(${updates.destination.longitude}, ${updates.destination.latitude}), 4326)`
+                : updates.destination === null
                     ? null
                     : undefined,
         })
@@ -173,7 +225,9 @@ export async function getChatMessages(
             id: m.id,
             role: m.role,
             parts: m.content as any[],
-            createdAt: m.createdAt.toISOString(),
+            createdAt: m.createdAt,
+            threadId: m.threadId,
+            content: m.content,
         })),
         hasMore,
     };
