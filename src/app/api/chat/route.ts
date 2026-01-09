@@ -684,18 +684,21 @@ Please extract the requested information or answer the question based on the con
                     const lastUserMessage = messages[messages.length - 1];
                     const assistantMessages = responseMessages;
 
+                    const now = new Date();
                     const messagesToSave = [
                         {
                             id: nanoid(),
                             threadId: threadId,
                             role: lastUserMessage.role,
                             content: lastUserMessage.parts as unknown[],
+                            createdAt: now,
                         },
-                        ...assistantMessages.map((m) => ({
+                        ...assistantMessages.map((m, index) => ({
                             id: nanoid(),
                             threadId: threadId,
                             role: m.role,
                             content: m.parts as unknown[],
+                            createdAt: new Date(now.getTime() + (index + 1) * 10), // Add 10ms offset per message
                         })),
                     ];
 
