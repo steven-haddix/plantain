@@ -47,11 +47,12 @@ export function PlaceDetailsPanel() {
   const place = data?.place;
   const photos = photosData?.photos || (place?.photos ? place.photos : []);
   const activeTrip = useAppStore((state) => state.activeTrip);
+  const activeTripId = activeTrip?.id ?? null;
   const [isPending, startTransition] = useTransition();
 
   const { data: savedLocations } = useSWR(
-    activeTrip?.id ? ["saved-locations", activeTrip.id] : null,
-    () => getSavedLocations(activeTrip!.id),
+    activeTripId ? ["saved-locations", activeTripId] : null,
+    () => getSavedLocations(activeTripId!),
   );
 
   const isSaved = savedLocations?.some(
