@@ -126,6 +126,8 @@ export async function createTrip(
     const { user } = await neonAuth();
     if (!user) throw new Error("Unauthorized");
 
+    const { destinationLocation, ...tripColumns } = getTableColumns(trips);
+
     const [newTrip] = await db
         .insert(trips)
         .values({
@@ -138,10 +140,28 @@ export async function createTrip(
                 ? sql`ST_SetSRID(ST_MakePoint(${destination.longitude}, ${destination.latitude}), 4326)`
                 : null,
         })
-        .returning();
+        .returning({
+            ...tripColumns,
+            destinationLatitude: sql<number | null>`CASE
+      WHEN ${trips.destinationLocation} IS NULL THEN NULL
+      ELSE ST_Y(${trips.destinationLocation}::geometry)
+    END`.as("destination_latitude"),
+            destinationLongitude: sql<number | null>`CASE
+      WHEN ${trips.destinationLocation} IS NULL THEN NULL
+      ELSE ST_X(${trips.destinationLocation}::geometry)
+    END`.as("destination_longitude"),
+        });
 
     revalidatePath("/dashboard");
-    return newTrip;
+    return {
+        ...newTrip,
+        destinationLocation: newTrip.destinationLatitude && newTrip.destinationLongitude
+            ? {
+                latitude: newTrip.destinationLatitude,
+                longitude: newTrip.destinationLongitude,
+            }
+            : null,
+    };
 }
 
 export async function updateTrip(
@@ -155,6 +175,8 @@ export async function updateTrip(
 ) {
     const { user } = await neonAuth();
     if (!user) throw new Error("Unauthorized");
+
+    const { destinationLocation, ...tripColumns } = getTableColumns(trips);
 
     const [updatedTrip] = await db
         .update(trips)
@@ -177,10 +199,28 @@ export async function updateTrip(
                     : undefined,
         })
         .where(and(eq(trips.id, id), eq(trips.ownerId, user.id)))
-        .returning();
+        .returning({
+            ...tripColumns,
+            destinationLatitude: sql<number | null>`CASE
+      WHEN ${trips.destinationLocation} IS NULL THEN NULL
+      ELSE ST_Y(${trips.destinationLocation}::geometry)
+    END`.as("destination_latitude"),
+            destinationLongitude: sql<number | null>`CASE
+      WHEN ${trips.destinationLocation} IS NULL THEN NULL
+      ELSE ST_X(${trips.destinationLocation}::geometry)
+    END`.as("destination_longitude"),
+        });
 
     revalidatePath("/dashboard");
-    return updatedTrip;
+    return {
+        ...updatedTrip,
+        destinationLocation: updatedTrip.destinationLatitude && updatedTrip.destinationLongitude
+            ? {
+                latitude: updatedTrip.destinationLatitude,
+                longitude: updatedTrip.destinationLongitude,
+            }
+            : null,
+    };
 }
 
 export async function getChatMessages(
@@ -223,7 +263,7 @@ export async function getChatMessages(
     return {
         messages: resultMessages.reverse().map((m) => ({
             id: m.id,
-            role: m.role,
+            role: m.role as "user" | "assistant" | "system",
             parts: m.content as any[],
             createdAt: m.createdAt,
             threadId: m.threadId,

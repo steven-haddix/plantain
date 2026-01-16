@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
-import type { ChatMessage } from "@/db/schema";
+import type { UIMessage } from "ai";
 
 interface Trip {
   id: string;
@@ -8,7 +8,7 @@ interface Trip {
   startDate: string | null;
   endDate: string | null;
   destinationLocation?: { latitude: number; longitude: number } | null;
-  chatMessages?: ChatMessage[];
+  chatMessages?: UIMessage[];
   hasMoreMessages?: boolean;
 }
 
@@ -17,7 +17,7 @@ interface AppState {
   setActiveTrip: (trip: Trip | null) => void;
   prependMessages: (
     tripId: string,
-    messages: ChatMessage[],
+    messages: UIMessage[],
     hasMore: boolean,
   ) => void;
   clearMessages: (tripId: string) => void;
