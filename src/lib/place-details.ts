@@ -10,6 +10,10 @@ export type PlaceDetails = {
   rating?: number;
   reviewsCount?: number;
   address?: string;
+  source?: string;
+  url?: string;
+  priceText?: string;
+  locationPrecision?: "exact" | "geocoded" | "centroid" | "unknown";
   photos?: PlacePhoto[];
   googlePlaceId?: string;
   latitude?: number;

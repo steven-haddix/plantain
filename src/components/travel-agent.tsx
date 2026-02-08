@@ -10,7 +10,15 @@ import {
   type UIMessagePart,
   type UITools,
 } from "ai";
-import { Calendar, MapPin, Pin, Plane, Sparkles, Trash2 } from "lucide-react";
+import {
+  Calendar,
+  MapPin,
+  Pin,
+  Plane,
+  Sparkles,
+  Trash2,
+  Users,
+} from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import posthog from "posthog-js";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -59,6 +67,7 @@ type TripLike = {
   title?: string | null;
   startDate?: string | null;
   endDate?: string | null;
+  partySize?: number | null;
   chatMessages?: UIMessage[];
   hasMoreMessages?: boolean;
 };
@@ -73,6 +82,8 @@ type SearchPlaceResult = MapPlace & { id?: string };
 
 type SearchPlacesToolOutput = {
   places: SearchPlaceResult[];
+  warnings?: string[];
+  unmappedCount?: number;
 };
 
 import { ChevronDown, ChevronRight } from "lucide-react";
@@ -108,10 +119,12 @@ function PlaceImage({ src, alt }: { src?: string; alt: string }) {
 function SearchPlacesToolCard({
   toolKey,
   places,
+  title = "Search Results",
   defaultOpen = false,
 }: {
   toolKey: string;
   places: SearchPlaceResult[];
+  title?: string;
   defaultOpen?: boolean;
 }) {
   const router = useRouter();
@@ -139,10 +152,10 @@ function SearchPlacesToolCard({
   useEffect(() => {
     applySearchResults({
       toolKey,
-      title: `Search results (${normalizedPlaces.length})`,
+      title: `${title} (${normalizedPlaces.length})`,
       places: normalizedPlaces,
     });
-  }, [applySearchResults, toolKey, normalizedPlaces]);
+  }, [applySearchResults, toolKey, normalizedPlaces, title]);
 
   useEffect(() => {
     if (didPrefetchRef.current) return;
@@ -200,7 +213,7 @@ function SearchPlacesToolCard({
               <ChevronRight className="size-4 text-muted-foreground transition-colors group-hover:text-foreground" />
             )}
             <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/70 transition-colors group-hover:text-foreground">
-              Search Results ({normalizedPlaces.length})
+              {title} ({normalizedPlaces.length})
             </div>
           </Button>
         </CollapsibleTrigger>
@@ -249,6 +262,23 @@ function SearchPlacesToolCard({
                 <span className="line-clamp-2 text-xs text-muted-foreground">
                   {place.address}
                 </span>
+                {(place.source || place.priceText) && (
+                  <div className="mt-1 flex flex-wrap items-center gap-1">
+                    {place.source && (
+                      <Badge
+                        variant="outline"
+                        className="h-5 px-1.5 text-[10px]"
+                      >
+                        {place.source}
+                      </Badge>
+                    )}
+                    {place.priceText && (
+                      <span className="text-[10px] text-muted-foreground">
+                        {place.priceText}
+                      </span>
+                    )}
+                  </div>
+                )}
                 {place.rating && (
                   <div className="mt-1 flex items-center gap-1 text-[10px] font-medium text-amber-600">
                     <span>★</span>
@@ -496,13 +526,32 @@ export function TravelAgent({ tripId, trip, onTripChange }: TravelAgentProps) {
       return <MessageResponse key={key}>{part.text}</MessageResponse>;
     }
 
-    if (part.type === "tool-searchPlaces") {
+    if (
+      part.type === "tool-searchPlaces" ||
+      part.type === "tool-searchHotels"
+    ) {
       const toolPart = part as ToolUIPart;
       const toolKey = `${messageId}:${index}`;
       const output = toolPart.output as SearchPlacesToolOutput | undefined;
       const places = output?.places;
 
-      if (!places?.length) return null;
+      if (!places?.length) {
+        if (part.type === "tool-searchHotels" && output?.warnings?.length) {
+          return (
+            <div key={key} className="space-y-1">
+              {output.warnings.map((warning, warningIndex) => (
+                <div
+                  key={`${toolKey}-warning-empty-${warningIndex}`}
+                  className="text-xs text-muted-foreground"
+                >
+                  {warning}
+                </div>
+              ))}
+            </div>
+          );
+        }
+        return null;
+      }
 
       const isLastMessage =
         messages.length > 0 && messages[messages.length - 1].id === messageId;
@@ -512,8 +561,25 @@ export function TravelAgent({ tripId, trip, onTripChange }: TravelAgentProps) {
           <SearchPlacesToolCard
             toolKey={toolKey}
             places={places}
+            title={
+              part.type === "tool-searchHotels"
+                ? "Hotel Results"
+                : "Search Results"
+            }
             defaultOpen={isLastMessage}
           />
+          {part.type === "tool-searchHotels" && output?.warnings?.length ? (
+            <div className="mt-2 space-y-1">
+              {output.warnings.slice(0, 3).map((warning, warningIndex) => (
+                <div
+                  key={`${toolKey}-warning-${warningIndex}`}
+                  className="text-xs text-muted-foreground"
+                >
+                  {warning}
+                </div>
+              ))}
+            </div>
+          ) : null}
         </div>
       );
     }
@@ -570,6 +636,15 @@ export function TravelAgent({ tripId, trip, onTripChange }: TravelAgentProps) {
                   {new Date(trip.startDate).toLocaleDateString()}
                 </Badge>
               )}
+              {trip?.partySize ? (
+                <Badge
+                  variant="secondary"
+                  className="border-muted-foreground/20"
+                >
+                  <Users className="mr-1 size-3" />
+                  {trip.partySize} travelers
+                </Badge>
+              ) : null}
             </div>
           </div>
         </div>

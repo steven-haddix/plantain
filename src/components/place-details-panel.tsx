@@ -1,6 +1,6 @@
 "use client";
 
-import { MapPin, X, Zap } from "lucide-react";
+import { ExternalLink, MapPin, X, Zap } from "lucide-react";
 import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useTransition } from "react";
@@ -27,6 +27,13 @@ import {
 import { useAppStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
 
+const toDateOnly = (value?: string | null) => {
+  if (!value) return undefined;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return undefined;
+  return date.toISOString().slice(0, 10);
+};
+
 export function PlaceDetailsPanel() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -46,7 +53,38 @@ export function PlaceDetailsPanel() {
 
   const place = data?.place;
   const photos = photosData?.photos || (place?.photos ? place.photos : []);
+  const source = place?.source?.toLowerCase();
+  const listingUrl = place?.url;
+  const listingButtonLabel = (() => {
+    if (!source) return "Open Listing";
+    if (source.includes("airbnb")) return "Open on Airbnb";
+    if (source.includes("hotels")) return "Open on Hotels.com";
+    if (source.includes("google")) return "Open on Google Hotels";
+    return "Open Listing";
+  })();
   const activeTrip = useAppStore((state) => state.activeTrip);
+  const tripCheckIn = toDateOnly(activeTrip?.startDate);
+  const tripCheckOut = toDateOnly(activeTrip?.endDate);
+
+  const listingUrlWithDates = (() => {
+    if (!listingUrl) return undefined;
+    if (!source?.includes("airbnb")) return listingUrl;
+    if (!tripCheckIn || !tripCheckOut) return listingUrl;
+
+    try {
+      const url = new URL(listingUrl);
+      if (!url.searchParams.get("check_in")) {
+        url.searchParams.set("check_in", tripCheckIn);
+      }
+      if (!url.searchParams.get("check_out")) {
+        url.searchParams.set("check_out", tripCheckOut);
+      }
+      return url.toString();
+    } catch {
+      return listingUrl;
+    }
+  })();
+
   const activeTripId = activeTrip?.id ?? null;
   const [isPending, startTransition] = useTransition();
 
@@ -167,6 +205,23 @@ export function PlaceDetailsPanel() {
                 </div>
               )}
               <div className="flex items-center gap-2">
+                {listingUrlWithDates ? (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-8 shrink-0 gap-1.5 text-xs"
+                    onClick={() => {
+                      window.open(
+                        listingUrlWithDates,
+                        "_blank",
+                        "noopener,noreferrer",
+                      );
+                    }}
+                  >
+                    <ExternalLink className="size-3.5" />
+                    {listingButtonLabel}
+                  </Button>
+                ) : null}
                 <Button
                   variant="outline"
                   size="sm"

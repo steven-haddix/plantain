@@ -58,6 +58,7 @@ export const trips = pgTable(
     title: text("title"),
     startDate: date("start_date"),
     endDate: date("end_date"),
+    partySize: integer("party_size"),
     destinationLocation: geographyPoint("destination_location"),
   },
   (table) => [
@@ -68,6 +69,10 @@ export const trips = pgTable(
     check(
       "trips_destination_location_srid",
       sql`ST_SRID(${table.destinationLocation}::geometry) = 4326`,
+    ),
+    check(
+      "trips_party_size_range",
+      sql`${table.partySize} is null or (${table.partySize} >= 1 and ${table.partySize} <= 100)`,
     ),
   ],
 );

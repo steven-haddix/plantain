@@ -35,6 +35,25 @@ const PLACE_CATEGORIES = [
 
 type PlaceCategory = (typeof PLACE_CATEGORIES)[number];
 
+const normalizePartySizeInput = (
+    value: number | null | undefined,
+    options?: { allowNull?: boolean },
+) => {
+    if (value === undefined) {
+        return undefined;
+    }
+
+    if (value === null) {
+        return options?.allowNull ? null : undefined;
+    }
+
+    if (!Number.isInteger(value) || value < 1 || value > 100) {
+        throw new Error("Party size must be an integer between 1 and 100.");
+    }
+
+    return value;
+};
+
 const classifyPlaceCategory = async (
     placeData: PlaceDetails,
 ): Promise<PlaceCategory> => {
@@ -122,6 +141,7 @@ export async function createTrip(
     startDate?: Date,
     endDate?: Date,
     destination?: { latitude: number; longitude: number },
+    partySize?: number | null,
 ) {
     const { user } = await neonAuth();
     if (!user) throw new Error("Unauthorized");
@@ -136,6 +156,7 @@ export async function createTrip(
             title,
             startDate: startDate ? startDate.toISOString() : null,
             endDate: endDate ? endDate.toISOString() : null,
+            partySize: normalizePartySizeInput(partySize) ?? null,
             destinationLocation: destination
                 ? sql`ST_SetSRID(ST_MakePoint(${destination.longitude}, ${destination.latitude}), 4326)`
                 : null,
@@ -170,6 +191,7 @@ export async function updateTrip(
         title?: string;
         startDate?: Date | null;
         endDate?: Date | null;
+        partySize?: number | null;
         destination?: { latitude: number; longitude: number } | null;
     },
 ) {
@@ -192,6 +214,9 @@ export async function updateTrip(
                 : updates.endDate === null
                     ? null
                     : undefined,
+            partySize: normalizePartySizeInput(updates.partySize, {
+                allowNull: true,
+            }),
             destinationLocation: updates.destination
                 ? sql`ST_SetSRID(ST_MakePoint(${updates.destination.longitude}, ${updates.destination.latitude}), 4326)`
                 : updates.destination === null

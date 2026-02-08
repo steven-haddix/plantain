@@ -57,6 +57,7 @@ export default function Dashboard() {
               freshTrip.title !== activeTrip?.title ||
               freshTrip.startDate !== activeTrip?.startDate ||
               freshTrip.endDate !== activeTrip?.endDate ||
+              freshTrip.partySize !== activeTrip?.partySize ||
               JSON.stringify(messages) !==
               JSON.stringify(activeTrip?.chatMessages) ||
               hasMore !== activeTrip?.hasMoreMessages;

@@ -8,6 +8,7 @@ import {
   MapPin,
   Pencil,
   Plane,
+  Users,
 } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { useCallback, useEffect, useState } from "react";
@@ -50,8 +51,25 @@ interface Trip {
   title: string | null;
   startDate: string | null;
   endDate: string | null;
+  partySize?: number | null;
   destinationLocation?: { latitude: number; longitude: number } | null;
 }
+
+const parsePartySizeInput = (
+  value: string,
+): { value: number | null; error?: string } => {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return { value: null };
+  }
+
+  const parsed = Number.parseInt(trimmed, 10);
+  if (!Number.isInteger(parsed) || parsed < 1 || parsed > 100) {
+    return { value: null, error: "Party size must be between 1 and 100." };
+  }
+
+  return { value: parsed };
+};
 
 // ... existing TripsModal component ...
 
@@ -172,6 +190,7 @@ export function TripsModal({
     latitude: number;
     longitude: number;
   } | null>(null);
+  const [newTripPartySize, setNewTripPartySize] = useState("");
   const [isCreating, setIsCreating] = useState(false);
 
   // Editing state
@@ -182,6 +201,7 @@ export function TripsModal({
     latitude: number;
     longitude: number;
   } | null>(null);
+  const [editPartySize, setEditPartySize] = useState("");
   const [isUpdating, setIsUpdating] = useState(false);
   const hasTrips = trips.length > 0;
 
@@ -208,6 +228,12 @@ export function TripsModal({
   async function handleCreateTrip() {
     if (!newTripName.trim()) return;
 
+    const parsedPartySize = parsePartySizeInput(newTripPartySize);
+    if (parsedPartySize.error) {
+      toast.error(parsedPartySize.error);
+      return;
+    }
+
     try {
       setIsCreating(true);
       const newTrip = await createTrip(
@@ -215,11 +241,13 @@ export function TripsModal({
         newTripDate?.from,
         newTripDate?.to,
         newTripLocation || undefined,
+        parsedPartySize.value,
       );
       toast.success("Trip created successfully!");
       setNewTripName("");
       setNewTripDate(undefined);
       setNewTripLocation(null);
+      setNewTripPartySize("");
       onSelect(newTrip);
     } catch (_error) {
       toast.error("Failed to create trip");
@@ -231,12 +259,19 @@ export function TripsModal({
   async function handleUpdateTrip(tripId: string) {
     if (!editName.trim()) return;
 
+    const parsedPartySize = parsePartySizeInput(editPartySize);
+    if (parsedPartySize.error) {
+      toast.error(parsedPartySize.error);
+      return;
+    }
+
     try {
       setIsUpdating(true);
       await updateTrip(tripId, {
         title: editName,
         startDate: editDate?.from || null,
         endDate: editDate?.to || null,
+        partySize: parsedPartySize.value,
         destination: editLocation,
       });
 
@@ -255,6 +290,7 @@ export function TripsModal({
     setEditName(trip.title || "");
     setEditComponentDate(trip.startDate, trip.endDate);
     setEditLocation(trip.destinationLocation || null);
+    setEditPartySize(trip.partySize ? String(trip.partySize) : "");
   }
 
   function setEditComponentDate(start: string | null, end: string | null) {
@@ -328,6 +364,26 @@ export function TripsModal({
                     <LocationSearch
                       onSelect={setEditLocation}
                       defaultValue={editLocation}
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label
+                      htmlFor="edit-party-size"
+                      className="text-xs font-medium text-muted-foreground uppercase tracking-wider"
+                    >
+                      Travelers
+                    </Label>
+                    <Input
+                      id="edit-party-size"
+                      type="number"
+                      min={1}
+                      max={100}
+                      inputMode="numeric"
+                      placeholder="How many people?"
+                      value={editPartySize}
+                      onChange={(e) => setEditPartySize(e.target.value)}
+                      className="bg-white/5 border-white/10 focus:border-primary/50"
                     />
                   </div>
 
@@ -433,6 +489,16 @@ export function TripsModal({
                     <LocationSearch
                       onSelect={setNewTripLocation}
                       defaultValue={newTripLocation}
+                    />
+                    <Input
+                      type="number"
+                      min={1}
+                      max={100}
+                      inputMode="numeric"
+                      placeholder="Travelers (optional)"
+                      value={newTripPartySize}
+                      onChange={(e) => setNewTripPartySize(e.target.value)}
+                      className="bg-white/5 border-white/10 focus:border-primary/50"
                     />
                     <Popover>
                       <PopoverTrigger asChild>
@@ -550,6 +616,13 @@ export function TripsModal({
                                 Location Set
                               </>
                             )}
+                            {trip.partySize ? (
+                              <>
+                                <div className="w-px h-3 bg-white/20 mx-1" />
+                                <Users className="w-3 h-3" />
+                                {trip.partySize} travelers
+                              </>
+                            ) : null}
                           </div>
                         </div>
                       </Button>
