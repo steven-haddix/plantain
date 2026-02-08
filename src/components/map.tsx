@@ -3,7 +3,7 @@
 import L from "leaflet";
 import { Trash2 } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { MapContainer, Marker, Popup, TileLayer, useMap } from "react-leaflet";
 import useSWR from "swr";
 import type { ItineraryEventsResponse } from "@/components/itinerary/types";
@@ -35,7 +35,6 @@ const fixLeafletIcons = () => {
   });
 };
 
-
 /**
  * Create a day-specific marker icon with dynamic color based on day index.
  * Uses CSS custom property for the hue to enable smooth theming.
@@ -55,17 +54,30 @@ function MapController({ places }: { places: MapPlace[] }) {
   const map = useMap();
   const selectedPlaceId = useMapStore((state) => state.selectedPlaceId);
   const activeTrip = useAppStore((state) => state.activeTrip);
+  const hasAutoCenteredForTripRef = useRef(false);
+  const lastTripIdRef = useRef<string | undefined>(undefined);
 
   useEffect(() => {
+    if (activeTrip?.id !== lastTripIdRef.current) {
+      lastTripIdRef.current = activeTrip?.id;
+      hasAutoCenteredForTripRef.current = false;
+    }
+
     if (!selectedPlaceId) {
-      // If no place is selected, but we have a trip destination, fly to it
-      // We only do this if we haven't selected a place, to avoid fighting for control
-      if (activeTrip?.destinationLocation) {
+      // Auto-center only once when a trip first loads with no place selected.
+      if (
+        activeTrip?.destinationLocation &&
+        !hasAutoCenteredForTripRef.current
+      ) {
         map.flyTo(
-          [activeTrip.destinationLocation.latitude, activeTrip.destinationLocation.longitude],
+          [
+            activeTrip.destinationLocation.latitude,
+            activeTrip.destinationLocation.longitude,
+          ],
           12, // Zoom level for a city/region overview
-          { animate: true, duration: 1.5 }
+          { animate: true, duration: 1.5 },
         );
+        hasAutoCenteredForTripRef.current = true;
       }
       return;
     }
@@ -77,7 +89,13 @@ function MapController({ places }: { places: MapPlace[] }) {
         duration: 1.5,
       });
     }
-  }, [map, selectedPlaceId, places, activeTrip?.destinationLocation]);
+  }, [
+    map,
+    selectedPlaceId,
+    places,
+    activeTrip?.destinationLocation,
+    activeTrip?.id,
+  ]);
 
   return null;
 }
@@ -85,7 +103,6 @@ function MapController({ places }: { places: MapPlace[] }) {
 export default function MapView() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const activeResearch = useMapStore((state) => state.activeResearch);
   const pinnedResearch = useMapStore((state) => state.pinnedResearch);
   const accumulatedSearchPlaces = useMapStore(
     (state) => state.accumulatedSearchPlaces,
