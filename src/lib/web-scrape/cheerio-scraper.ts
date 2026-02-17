@@ -1,6 +1,6 @@
 import { Readability } from "@mozilla/readability";
 import * as cheerio from "cheerio";
-import { JSDOM } from "jsdom";
+import { parseHTML } from "linkedom";
 
 // Config: Max concurrent requests to avoid banning/timeouts
 const CONCURRENT_LIMIT = 5;
@@ -34,8 +34,8 @@ export async function scrapeUrl(url: string): Promise<{ title: string; content: 
         }
 
         const html = await response.text();
-        const dom = new JSDOM(html, { url: normalizedUrl });
-        const reader = new Readability(dom.window.document);
+        const { document } = parseHTML(html);
+        const reader = new Readability(document);
         const article = reader.parse();
 
         return {
@@ -96,9 +96,9 @@ export async function crawl(
         const html = await response.text();
 
         // 2. Extract Primary Text (Readability)
-        // We use JSDOM to create a virtual DOM for Readability to parse
-        const dom = new JSDOM(html, { url: normalizedUrl });
-        const reader = new Readability(dom.window.document);
+        // We use linkedom to create a virtual DOM for Readability to parse
+        const { document } = parseHTML(html);
+        const reader = new Readability(document);
         const article = reader.parse();
 
         if (article) {

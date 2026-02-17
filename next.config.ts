@@ -11,6 +11,7 @@ const nextConfig: NextConfig = {
       { protocol: "https", hostname: "lh6.googleusercontent.com" },
       { protocol: "https", hostname: "**.muscache.com" },
       { protocol: "https", hostname: "**.airbnbusercontent.com" },
+      { protocol: "https", hostname: "streetviewpixels-pa.googleapis.com" },
     ],
   },
 };
