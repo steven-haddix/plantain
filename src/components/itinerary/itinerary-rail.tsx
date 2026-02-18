@@ -1,7 +1,7 @@
 "use client";
 
 import { addDays, format, isValid, parseISO } from "date-fns";
-import { Calendar, X } from "lucide-react";
+import { X } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef } from "react";
 import useSWR from "swr";
@@ -35,7 +35,7 @@ function getTripDayCount(args: {
   return Math.max(1, diff + 1);
 }
 
-export function ItineraryRail({
+export function ItineraryPanel({
   tripId,
   startDate,
   endDate,
@@ -47,7 +47,6 @@ export function ItineraryRail({
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  const isOpen = searchParams.get("itinerary") === "1";
   const selectedEventId = searchParams.get("event") ?? undefined;
   const targetDayIndex = searchParams.get("day")
     ? Number(searchParams.get("day"))
@@ -95,13 +94,6 @@ export function ItineraryRail({
     router.replace(`/dashboard?${next.toString()}`);
   };
 
-  const open = () => {
-    const next = new URLSearchParams(searchParams.toString());
-    next.set("itinerary", "1");
-    next.delete("saved");
-    setParams(next);
-  };
-
   const close = () => {
     const next = new URLSearchParams(searchParams.toString());
     next.delete("itinerary");
@@ -129,7 +121,7 @@ export function ItineraryRail({
 
   // Scroll to day on open/change
   useEffect(() => {
-    if (isOpen && targetDayIndex !== null) {
+    if (targetDayIndex !== null) {
       const el = dayRefs.current.get(targetDayIndex);
       if (el) {
         // slight delay to allow layout
@@ -138,154 +130,137 @@ export function ItineraryRail({
         }, 100);
       }
     }
-  }, [isOpen, targetDayIndex]);
+  }, [targetDayIndex]);
 
   return (
-    <div className="pointer-events-none absolute inset-0 z-10">
-      <div className="pointer-events-auto absolute left-4 top-4">
-        {!isOpen ? (
-          <Button
-            type="button"
-            size="icon"
-            variant="secondary"
-            className="size-10 rounded-2xl bg-background/80 backdrop-blur shadow-lg"
-            onClick={open}
-            aria-label="Open itinerary"
-          >
-            <Calendar className="size-5" />
-          </Button>
-        ) : (
-          <div className="w-[420px] max-w-[calc(100vw-2rem)] overflow-hidden rounded-2xl border bg-background/90 backdrop-blur shadow-lg">
-            <div className="flex items-start justify-between gap-3 border-b p-4 bg-background/50">
-              <div className="min-w-0">
-                <div className="text-sm text-muted-foreground">Itinerary</div>
-                <div className="mt-1 truncate text-base font-semibold">
-                  Trip Rundown
-                </div>
-                {hasValidStart && endDate ? (
-                  <div className="text-xs text-muted-foreground mt-0.5">
-                    {format(start!, "MMM d")} –{" "}
-                    {format(parseISO(endDate), "MMM d, yyyy")}
-                  </div>
-                ) : null}
-              </div>
-              <Button
-                size="icon"
-                variant="ghost"
-                onClick={close}
-                aria-label="Close itinerary"
-                className="hover:bg-muted"
-              >
-                <X className="size-4" />
-              </Button>
-            </div>
-
-            <div className="relative">
-              {isLoading ? (
-                <div className="p-8 text-center text-sm text-muted-foreground">
-                  Loading itinerary…
-                </div>
-              ) : null}
-
-              {error ? (
-                <div className="p-8 text-center text-sm text-destructive">
-                  Failed to load itinerary.
-                </div>
-              ) : null}
-
-              <ScrollArea className="flex h-[min(600px,calc(100vh-10rem))]">
-                <div className="min-w-0 relative pb-8 pt-4">
-                  {/* Continuous spine line */}
-                  <div className="absolute left-[27px] top-4 bottom-4 w-px bg-border/60" />
-
-                  {Array.from({ length: dayCount }).map((_, dayIndex) => {
-                    const dayEvents = eventsByDay.get(dayIndex) || [];
-                    const date = hasValidStart
-                      ? addDays(start!, dayIndex)
-                      : null;
-                    const dateLabel = date
-                      ? format(date, "EEEE, d MMM")
-                      : `Day ${dayIndex + 1}`;
-                    const isFirstDay = dayIndex === 0;
-
-                    return (
-                      <div
-                        key={dayIndex}
-                        className={cn(
-                          "group relative pl-16 pr-4",
-                          !isFirstDay && "mt-8",
-                        )}
-                        ref={(el) => {
-                          if (el) dayRefs.current.set(dayIndex, el);
-                          else dayRefs.current.delete(dayIndex);
-                        }}
-                      >
-                        {/* Timeline Node for Day Header */}
-                        <div
-                          className="absolute left-[21px] top-0.5 z-10 size-3 rounded-full border-2 bg-background ring-4 ring-background transition-colors"
-                          style={{
-                            borderColor: `oklch(0.7 0.14 ${getDayHue(dayIndex)})`,
-                          }}
-                        />
-
-                        {/* Day Header */}
-                        <div className="mb-4 -mt-1 flex items-baseline justify-between">
-                          <h3 className="font-semibold text-foreground/90">
-                            {dateLabel}
-                          </h3>
-                          <span className="text-xs text-muted-foreground font-medium">
-                            {dayIndex === 0
-                              ? "1st day"
-                              : dayIndex === 1
-                                ? "2nd day"
-                                : `${dayIndex + 1}th day`}
-                          </span>
-                        </div>
-
-                        <div className="space-y-6">
-                          {!dayEvents.length ? (
-                            <div className="text-sm text-muted-foreground italic pl-2 opacity-60">
-                              No events planned
-                            </div>
-                          ) : (
-                            dayEvents.map((event, idx) => {
-                              const isSelected = event.id === selectedEventId;
-                              return (
-                                <div key={event.id} className="relative">
-                                  {/* Event Node on spine */}
-                                  <div
-                                    className={cn(
-                                      "absolute -left-[39px] top-4 size-2 rounded-full border bg-background ring-4 ring-background transition-colors",
-                                      !isSelected && "border-border",
-                                    )}
-                                    style={
-                                      isSelected
-                                        ? {
-                                          borderColor: `oklch(0.7 0.14 ${getDayHue(dayIndex)})`,
-                                          backgroundColor: `oklch(0.7 0.14 ${getDayHue(dayIndex)})`,
-                                        }
-                                        : undefined
-                                    }
-                                  />
-
-                                  <ItineraryEventCard
-                                    event={event}
-                                    isSelected={isSelected}
-                                    onSelect={selectEvent}
-                                  />
-                                </div>
-                              );
-                            })
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </ScrollArea>
-            </div>
+    <div className="w-[420px] max-w-[calc(100vw-2rem)] overflow-hidden rounded-2xl border bg-background/90 backdrop-blur shadow-lg">
+      <div className="flex items-start justify-between gap-3 border-b p-4 bg-background/50">
+        <div className="min-w-0">
+          <div className="text-sm text-muted-foreground">Itinerary</div>
+          <div className="mt-1 truncate text-base font-semibold">
+            Trip Rundown
           </div>
-        )}
+          {hasValidStart && endDate ? (
+            <div className="text-xs text-muted-foreground mt-0.5">
+              {format(start!, "MMM d")} –{" "}
+              {format(parseISO(endDate), "MMM d, yyyy")}
+            </div>
+          ) : null}
+        </div>
+        <Button
+          size="icon"
+          variant="ghost"
+          onClick={close}
+          aria-label="Close itinerary"
+          className="hover:bg-muted"
+        >
+          <X className="size-4" />
+        </Button>
+      </div>
+
+      <div className="relative">
+        {isLoading ? (
+          <div className="p-8 text-center text-sm text-muted-foreground">
+            Loading itinerary…
+          </div>
+        ) : null}
+
+        {error ? (
+          <div className="p-8 text-center text-sm text-destructive">
+            Failed to load itinerary.
+          </div>
+        ) : null}
+
+        <ScrollArea className="flex h-[min(600px,calc(100vh-10rem))]">
+          <div className="min-w-0 relative pb-8 pt-4">
+            {/* Continuous spine line */}
+            <div className="absolute left-[27px] top-4 bottom-4 w-px bg-border/60" />
+
+            {Array.from({ length: dayCount }).map((_, dayIndex) => {
+              const dayEvents = eventsByDay.get(dayIndex) || [];
+              const date = hasValidStart
+                ? addDays(start!, dayIndex)
+                : null;
+              const dateLabel = date
+                ? format(date, "EEEE, d MMM")
+                : `Day ${dayIndex + 1}`;
+              const isFirstDay = dayIndex === 0;
+
+              return (
+                <div
+                  key={dayIndex}
+                  className={cn(
+                    "group relative pl-16 pr-4",
+                    !isFirstDay && "mt-8",
+                  )}
+                  ref={(el) => {
+                    if (el) dayRefs.current.set(dayIndex, el);
+                    else dayRefs.current.delete(dayIndex);
+                  }}
+                >
+                  {/* Timeline Node for Day Header */}
+                  <div
+                    className="absolute left-[21px] top-0.5 z-10 size-3 rounded-full border-2 bg-background ring-4 ring-background transition-colors"
+                    style={{
+                      borderColor: `oklch(0.7 0.14 ${getDayHue(dayIndex)})`,
+                    }}
+                  />
+
+                  {/* Day Header */}
+                  <div className="mb-4 -mt-1 flex items-baseline justify-between">
+                    <h3 className="font-semibold text-foreground/90">
+                      {dateLabel}
+                    </h3>
+                    <span className="text-xs text-muted-foreground font-medium">
+                      {dayIndex === 0
+                        ? "1st day"
+                        : dayIndex === 1
+                          ? "2nd day"
+                          : `${dayIndex + 1}th day`}
+                    </span>
+                  </div>
+
+                  <div className="space-y-6">
+                    {!dayEvents.length ? (
+                      <div className="text-sm text-muted-foreground italic pl-2 opacity-60">
+                        No events planned
+                      </div>
+                    ) : (
+                      dayEvents.map((event, idx) => {
+                        const isSelected = event.id === selectedEventId;
+                        return (
+                          <div key={event.id} className="relative">
+                            {/* Event Node on spine */}
+                            <div
+                              className={cn(
+                                "absolute -left-[39px] top-4 size-2 rounded-full border bg-background ring-4 ring-background transition-colors",
+                                !isSelected && "border-border",
+                              )}
+                              style={
+                                isSelected
+                                  ? {
+                                    borderColor: `oklch(0.7 0.14 ${getDayHue(dayIndex)})`,
+                                    backgroundColor: `oklch(0.7 0.14 ${getDayHue(dayIndex)})`,
+                                  }
+                                  : undefined
+                              }
+                            />
+
+                            <ItineraryEventCard
+                              event={event}
+                              isSelected={isSelected}
+                              onSelect={selectEvent}
+                            />
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </ScrollArea>
       </div>
     </div>
   );

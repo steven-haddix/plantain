@@ -5,9 +5,8 @@ import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { mutate } from "swr";
 import { getChatMessages, getTrips } from "@/app/actions/trips";
-import { ItineraryRail } from "@/components/itinerary/itinerary-rail";
+import { MapRailTabs } from "@/components/map-rail-tabs";
 import { PlaceDetailsPanel } from "@/components/place-details-panel";
-import { SavedLocationsRail } from "@/components/saved-locations-rail";
 import { TravelAgent } from "@/components/travel-agent";
 import { TripsModal } from "@/components/trips-modal";
 import {
@@ -97,14 +96,11 @@ export default function Dashboard() {
             <LeafletMap />
             <PlaceDetailsPanel />
             {activeTrip ? (
-              <>
-                <ItineraryRail
-                  tripId={activeTrip.id}
-                  startDate={activeTrip.startDate}
-                  endDate={activeTrip.endDate}
-                />
-                <SavedLocationsRail tripId={activeTrip.id} />
-              </>
+              <MapRailTabs
+                tripId={activeTrip.id}
+                startDate={activeTrip.startDate}
+                endDate={activeTrip.endDate}
+              />
             ) : null}
           </div>
         </ResizablePanel>
