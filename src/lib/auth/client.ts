@@ -1,5 +1,5 @@
 "use client";
 
-import { createAuthClient } from "@neondatabase/neon-js/auth/next";
+import { createAuthClient } from "better-auth/react";
 
 export const authClient = createAuthClient();

@@ -1,7 +1,7 @@
-import { neonAuth } from "@neondatabase/auth/next/server";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { places } from "@/db/schema";
+import { getRequestAuthSession } from "@/lib/auth";
 import { hotelSearchService } from "@/lib/hotel-search/service";
 import { placesService } from "@/lib/places-search/service";
 
@@ -33,7 +33,8 @@ export async function GET(
   _req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const { user } = await neonAuth();
+  const session = await getRequestAuthSession(_req);
+  const user = session?.user;
   if (!user) {
     return new Response("Unauthorized", { status: 401 });
   }

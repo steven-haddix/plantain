@@ -2,10 +2,8 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "leaflet/dist/leaflet.css";
 import "./globals.css";
-import { NeonAuthUIProvider } from "@neondatabase/neon-js/auth/react/ui";
 import { NavHeader } from "@/components/nav-header";
 import { Toaster } from "@/components/ui/sonner";
-import { authClient } from "@/lib/auth/client";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -22,8 +20,6 @@ export const metadata: Metadata = {
   description: "Plan and manage your trips with an expert AI travel agent",
 };
 
-import { UserSync } from "@/components/user-sync";
-
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -34,22 +30,10 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased bg-background text-foreground`}
       >
-        <NeonAuthUIProvider
-          authClient={authClient}
-          redirectTo="/dashboard"
-          credentials={false}
-          magicLink={true}
-          emailOTP={true}
-          social={{ providers: ["google"] }}
-        >
-          <UserSync />
-          <div className="flex flex-col min-h-screen">
-            <NavHeader />
-            <main className="flex-1 flex flex-col">
-              {children}
-            </main>
-          </div>
-        </NeonAuthUIProvider>
+        <div className="flex min-h-screen flex-col">
+          <NavHeader />
+          <main className="flex flex-1 flex-col">{children}</main>
+        </div>
         <Toaster />
       </body>
     </html>

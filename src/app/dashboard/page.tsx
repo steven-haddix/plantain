@@ -5,9 +5,9 @@ import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { mutate } from "swr";
 import { getChatMessages, getTrips } from "@/app/actions/trips";
+import { ChatRail } from "@/components/chat-rail";
 import { MapRailTabs } from "@/components/map-rail-tabs";
 import { PlaceDetailsPanel } from "@/components/place-details-panel";
-import { TravelAgent } from "@/components/travel-agent";
 import { TripsModal } from "@/components/trips-modal";
 import {
   ResizableHandle,
@@ -29,14 +29,14 @@ export default function Dashboard() {
   const setActiveTrip = useAppStore((state) => state.setActiveTrip);
 
   useEffect(() => {
-    if (!isPending && !data?.session) {
+    if (!isPending && !data) {
       router.push("/");
     }
   }, [isPending, data, router]);
 
   useEffect(() => {
     const tripId = activeTrip?.id;
-    if (tripId && !isPending && data?.session) {
+    if (tripId && !isPending && data) {
       Promise.all([getTrips(), getChatMessages(tripId)])
         .then(([trips, chatData]) => {
           const chatDataObj = chatData;
@@ -58,7 +58,7 @@ export default function Dashboard() {
               freshTrip.endDate !== activeTrip?.endDate ||
               freshTrip.partySize !== activeTrip?.partySize ||
               JSON.stringify(messages) !==
-              JSON.stringify(activeTrip?.chatMessages) ||
+                JSON.stringify(activeTrip?.chatMessages) ||
               hasMore !== activeTrip?.hasMoreMessages;
 
             if (hasChanged) {
@@ -75,7 +75,7 @@ export default function Dashboard() {
         });
     }
     // Only run on trip change or session load
-  }, [activeTrip?.id, isPending, data?.user?.id, setActiveTrip]);
+  }, [activeTrip, isPending, data, setActiveTrip]);
 
   if (isPending) {
     return (
@@ -85,7 +85,7 @@ export default function Dashboard() {
     );
   }
 
-  if (!data?.session) return null;
+  if (!data) return null;
 
   return (
     <div className="relative h-[calc(100vh-3.5rem)] w-full overflow-hidden bg-muted/20">
@@ -109,9 +109,9 @@ export default function Dashboard() {
 
         <ResizablePanel defaultSize={30} minSize={20} className="bg-background">
           {activeTrip ? (
-            <TravelAgent
-              tripId={activeTrip.id}
+            <ChatRail
               trip={activeTrip}
+              currentUser={data.user}
               onTripChange={() => {
                 // Refresh itinerary data
                 mutate(

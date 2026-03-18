@@ -43,6 +43,27 @@
       "when": 1769550000000,
       "tag": "0005_friendly_party_size",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1773801099124,
+      "tag": "0006_trip_chat_collab",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1773805262348,
+      "tag": "0007_better_auth_local",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1773809335256,
+      "tag": "0008_chat_thread_owner_nullable",
+      "breakpoints": true
     }
   ]
 }

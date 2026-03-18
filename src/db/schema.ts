@@ -4,6 +4,7 @@ import {
   check,
   customType,
   date,
+  index,
   integer,
   jsonb,
   pgEnum,
@@ -20,18 +21,94 @@ const geographyPoint = customType<{ data: string; driverData: string }>({
   },
 });
 
-const geometryPolygon = customType<{ data: string; driverData: string }>({
-  dataType() {
-    return "geometry";
+export const users = pgTable(
+  "users",
+  {
+    id: text("id").primaryKey(),
+    email: text("email").notNull(),
+    name: text("name").notNull(),
+    avatarUrl: text("avatar_url"),
+    emailVerified: boolean("email_verified").notNull().default(false),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .default(sql`now()`),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .default(sql`now()`),
   },
-});
+  (table) => [uniqueIndex("users_email_unique").on(table.email)],
+);
 
-export const users = pgTable("users", {
-  id: text("id").primaryKey(),
-  email: text("email"),
-  name: text("name"),
-  avatarUrl: text("avatar_url"),
-});
+export const sessions = pgTable(
+  "sessions",
+  {
+    id: text("id").primaryKey(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    token: text("token").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .default(sql`now()`),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .default(sql`now()`),
+    ipAddress: text("ip_address"),
+    userAgent: text("user_agent"),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+  },
+  (table) => [
+    uniqueIndex("sessions_token_unique").on(table.token),
+    index("sessions_user_id_idx").on(table.userId),
+  ],
+);
+
+export const accounts = pgTable(
+  "accounts",
+  {
+    id: text("id").primaryKey(),
+    accountId: text("account_id").notNull(),
+    providerId: text("provider_id").notNull(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    accessToken: text("access_token"),
+    refreshToken: text("refresh_token"),
+    idToken: text("id_token"),
+    accessTokenExpiresAt: timestamp("access_token_expires_at", {
+      withTimezone: true,
+    }),
+    refreshTokenExpiresAt: timestamp("refresh_token_expires_at", {
+      withTimezone: true,
+    }),
+    scope: text("scope"),
+    password: text("password"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .default(sql`now()`),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .default(sql`now()`),
+  },
+  (table) => [index("accounts_user_id_idx").on(table.userId)],
+);
+
+export const verifications = pgTable(
+  "verifications",
+  {
+    id: text("id").primaryKey(),
+    identifier: text("identifier").notNull(),
+    value: text("value").notNull(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .default(sql`now()`),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .default(sql`now()`),
+  },
+  (table) => [index("verifications_identifier_idx").on(table.identifier)],
+);
 
 export const placeCategory = pgEnum("place_category", [
   "restaurant",
@@ -74,6 +151,28 @@ export const trips = pgTable(
       "trips_party_size_range",
       sql`${table.partySize} is null or (${table.partySize} >= 1 and ${table.partySize} <= 100)`,
     ),
+  ],
+);
+
+export const tripMemberRole = pgEnum("trip_member_role", ["owner", "member"]);
+
+export const tripMembers = pgTable(
+  "trip_members",
+  {
+    id: text("id").primaryKey(),
+    tripId: text("trip_id")
+      .notNull()
+      .references(() => trips.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    role: tripMemberRole("role").notNull().default("member"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .default(sql`now()`),
+  },
+  (table) => [
+    uniqueIndex("trip_members_trip_user_unique").on(table.tripId, table.userId),
   ],
 );
 
@@ -183,35 +282,67 @@ export const activityLogs = pgTable("activity_logs", {
     .default(sql`now()`),
 });
 
-export const chatThreads = pgTable("chat_threads", {
-  id: text("id").primaryKey(),
-  tripId: text("trip_id")
-    .notNull()
-    .references(() => trips.id, { onDelete: "cascade" }),
-  userId: text("user_id")
-    .notNull()
-    .references(() => users.id, { onDelete: "cascade" }),
-  title: text("title"),
-  isPrivate: boolean("is_private").notNull().default(false),
-  createdAt: timestamp("created_at", { withTimezone: true })
-    .notNull()
-    .default(sql`now()`),
-});
+export const chatThreadKind = pgEnum("chat_thread_kind", [
+  "ai_dm",
+  "team_room",
+]);
 
-export const chatMessages = pgTable("chat_messages", {
-  id: text("id").primaryKey(),
-  threadId: text("thread_id")
-    .notNull()
-    .references(() => chatThreads.id, { onDelete: "cascade" }),
-  role: text("role").notNull(), // 'user' | 'assistant'
-  content: jsonb("content").$type<any[]>(), // AI-SDK message parts
-  createdAt: timestamp("created_at", { withTimezone: true })
-    .notNull()
-    .default(sql`now()`),
-});
+export const chatThreads = pgTable(
+  "chat_threads",
+  {
+    id: text("id").primaryKey(),
+    tripId: text("trip_id")
+      .notNull()
+      .references(() => trips.id, { onDelete: "cascade" }),
+    ownerUserId: text("owner_user_id").references(() => users.id, {
+      onDelete: "cascade",
+    }),
+    kind: chatThreadKind("kind").notNull().default("ai_dm"),
+    key: text("key").notNull(),
+    title: text("title"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .default(sql`now()`),
+    lastMessageAt: timestamp("last_message_at", { withTimezone: true })
+      .notNull()
+      .default(sql`now()`),
+  },
+  (table) => [
+    uniqueIndex("chat_threads_trip_key_unique").on(table.tripId, table.key),
+  ],
+);
+
+export const chatMessages = pgTable(
+  "chat_messages",
+  {
+    id: text("id").primaryKey(),
+    threadId: text("thread_id")
+      .notNull()
+      .references(() => chatThreads.id, { onDelete: "cascade" }),
+    authorUserId: text("author_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    role: text("role").notNull(), // 'user' | 'assistant'
+    content: jsonb("content").$type<unknown[]>(), // AI-SDK message parts
+    clientMessageId: text("client_message_id"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .default(sql`now()`),
+  },
+  (table) => [
+    uniqueIndex("chat_messages_thread_client_message_unique").on(
+      table.threadId,
+      table.clientMessageId,
+    ),
+  ],
+);
 
 export type User = typeof users.$inferSelect;
+export type Session = typeof sessions.$inferSelect;
+export type Account = typeof accounts.$inferSelect;
+export type Verification = typeof verifications.$inferSelect;
 export type Trip = typeof trips.$inferSelect;
+export type TripMember = typeof tripMembers.$inferSelect;
 export type Place = typeof places.$inferSelect;
 export type SavedLocation = typeof savedLocations.$inferSelect;
 export type ItineraryEvent = typeof itineraryEvents.$inferSelect;

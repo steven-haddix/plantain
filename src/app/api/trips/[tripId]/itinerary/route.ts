@@ -1,7 +1,5 @@
-import { neonAuth } from "@neondatabase/auth/next/server";
-import { and, eq } from "drizzle-orm";
-import { db } from "@/db";
-import { trips } from "@/db/schema";
+import { getRequestAuthSession } from "@/lib/auth";
+import { assertTripMemberAccess } from "@/lib/trip-access";
 import type {
   ItineraryEventBucket,
   ItineraryEventStatus,
@@ -26,7 +24,8 @@ export async function GET(
   req: Request,
   { params }: { params: Promise<{ tripId: string }> },
 ) {
-  const { user } = await neonAuth();
+  const session = await getRequestAuthSession(req);
+  const user = session?.user;
   if (!user) {
     return new Response("Unauthorized", { status: 401 });
   }
@@ -36,12 +35,9 @@ export async function GET(
     return new Response("Missing trip id", { status: 400 });
   }
 
-  const [trip] = await db
-    .select({ id: trips.id })
-    .from(trips)
-    .where(and(eq(trips.id, tripId), eq(trips.ownerId, user.id)));
-
-  if (!trip) {
+  try {
+    await assertTripMemberAccess(tripId, user.id);
+  } catch {
     return new Response("Trip not found", { status: 404 });
   }
 

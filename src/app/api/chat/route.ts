@@ -1,5 +1,4 @@
 import type { GoogleGenerativeAIProviderOptions } from "@ai-sdk/google";
-import { neonAuth } from "@neondatabase/auth/next/server";
 import {
   createAgentUIStreamResponse,
   createIdGenerator,
@@ -12,23 +11,23 @@ import { and, eq, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { z } from "zod";
 import { db } from "@/db";
+import { activityLogs, places, savedLocations, trips } from "@/db/schema";
+import { getRequestAuthSession } from "@/lib/auth";
 import {
-  hotelSearchService,
-  type HotelProviderId,
-} from "@/lib/hotel-search/service";
-import { placesService } from "@/lib/places-search/service";
+  appendMessagesToThread,
+  getOrCreateAiThread,
+} from "@/lib/chat/service";
 import { geocodingService } from "@/lib/geocoding/service";
-import { tripService } from "@/lib/trips/service";
-import { webSearchService } from "@/lib/web-search/service";
-import { scrapeUrl } from "@/lib/web-scrape/cheerio-scraper";
-
 import {
-  chatMessages,
-  chatThreads,
-  places,
-  savedLocations,
-  trips,
-} from "@/db/schema";
+  type HotelProviderId,
+  hotelSearchService,
+} from "@/lib/hotel-search/service";
+import type { HotelSearchResponse } from "@/lib/hotel-search/types";
+import { placesService } from "@/lib/places-search/service";
+import { assertTripMemberAccess } from "@/lib/trip-access";
+import { tripService } from "@/lib/trips/service";
+import { scrapeUrl } from "@/lib/web-scrape/cheerio-scraper";
+import { webSearchService } from "@/lib/web-search/service";
 
 export const maxDuration = 60;
 // Force rebuild: 2026-01-03
@@ -60,8 +59,27 @@ const hotelProviderEnum = z.enum(["airbnb", "hotels_com", "google_hotels"]);
 const isSyntheticHotelId = (id: string) =>
   /^(airbnb|hotels_com|google_hotels):/i.test(id);
 
-export async function POST(req: Request) {
-  const { user } = await neonAuth();
+const logAiActivity = async (
+  tripId: string,
+  actorId: string,
+  action: string,
+  metadata?: Record<string, unknown>,
+) => {
+  await db.insert(activityLogs).values({
+    id: nanoid(),
+    tripId,
+    actorId,
+    action,
+    metadata: {
+      source: "ai",
+      ...(metadata ?? {}),
+    },
+  });
+};
+
+export async function handleAiChatPost(req: Request, tripIdOverride?: string) {
+  const session = await getRequestAuthSession(req);
+  const user = session?.user;
 
   if (!user) {
     return new Response("Unauthorized", { status: 401 });
@@ -69,10 +87,11 @@ export async function POST(req: Request) {
 
   try {
     const body = await req.json();
-    const { id: threadId, currentTrip } = body ?? {};
+    const currentTrip = body?.currentTrip;
     const messages = Array.isArray(body?.messages) ? body.messages : undefined;
+    const tripId = tripIdOverride ?? currentTrip?.id;
 
-    if (!threadId || !currentTrip) {
+    if (!tripId) {
       return new Response("Missing trip context", { status: 400 });
     }
 
@@ -80,33 +99,14 @@ export async function POST(req: Request) {
       return new Response("Missing chat messages", { status: 400 });
     }
 
-    // Fetch trip context first to verify existence and ownership
-    const [trip] = await db
-      .select()
-      .from(trips)
-      .where(and(eq(trips.id, currentTrip.id), eq(trips.ownerId, user.id)));
-
-    if (!trip) {
+    let trip: Awaited<ReturnType<typeof assertTripMemberAccess>>;
+    try {
+      trip = await assertTripMemberAccess(tripId, user.id);
+    } catch {
       return new Response("Trip not found", { status: 404 });
     }
 
-    // Fetch thread or create if it doesn't exist
-    let [thread] = await db
-      .select()
-      .from(chatThreads)
-      .where(eq(chatThreads.id, threadId));
-
-    if (!thread) {
-      [thread] = await db
-        .insert(chatThreads)
-        .values({
-          id: threadId,
-          tripId: trip.id,
-          userId: user.id,
-          title: `Chat about ${trip.title || "Trip"}`,
-        })
-        .returning();
-    }
+    const thread = await getOrCreateAiThread(trip.id, user.id);
 
     // Fetch saved locations context
     const savedLocationsResult = await db
@@ -351,7 +351,8 @@ Professional, enthusiastic, helpful, and concise.
       experimental_telemetry: { isEnabled: true },
       tools: {
         updateTripDetails: tool({
-          description: "Update trip details like title, dates, or traveler count.",
+          description:
+            "Update trip details like title, dates, or traveler count.",
           inputSchema: z.object({
             title: z.string().optional(),
             startDate: z.string().optional().describe("ISO date string"),
@@ -366,6 +367,9 @@ Professional, enthusiastic, helpful, and concise.
           }),
           execute: async (updates) => {
             await db.update(trips).set(updates).where(eq(trips.id, trip.id));
+            await logAiActivity(trip.id, user.id, "trip.updated", {
+              updates,
+            });
             return { output: "Trip updated successfully." };
           },
         }),
@@ -479,7 +483,7 @@ Professional, enthusiastic, helpful, and concise.
               guests ??
               (typeof trip.partySize === "number" ? trip.partySize : undefined);
 
-            let searchResponse;
+            let searchResponse: HotelSearchResponse;
             try {
               searchResponse = await hotelSearchService.searchHotels({
                 locations,
@@ -650,6 +654,12 @@ Please extract the requested information or answer the question based on the con
               status: input.status,
               note: input.note,
             });
+            await logAiActivity(trip.id, user.id, "saved_location.created", {
+              placeId: place.id,
+              googlePlaceId: input.googlePlaceId,
+              name: input.name,
+              status: input.status,
+            });
 
             return { output: `Saved ${input.name} to your trip.` };
           },
@@ -673,6 +683,10 @@ Please extract the requested information or answer the question based on the con
                   eq(savedLocations.tripId, trip.id),
                 ),
               );
+            await logAiActivity(trip.id, user.id, "saved_location.updated", {
+              savedLocationId: id,
+              updates,
+            });
             return { output: "Location updated." };
           },
         }),
@@ -692,6 +706,9 @@ Please extract the requested information or answer the question based on the con
                   eq(savedLocations.tripId, trip.id),
                 ),
               );
+            await logAiActivity(trip.id, user.id, "saved_location.deleted", {
+              savedLocationId: id,
+            });
             return { output: "Location removed." };
           },
         }),
@@ -806,6 +823,13 @@ Please extract the requested information or answer the question based on the con
             if (!event) {
               return { output: "Failed to create itinerary item." };
             }
+            await logAiActivity(trip.id, user.id, "itinerary_event.created", {
+              itineraryEventId: event.id,
+              dayIndex: event.dayIndex,
+              bucket: event.bucket,
+              placeId: event.placeId,
+              customTitle: event.customTitle,
+            });
 
             const label = input.customTitle
               ? input.customTitle
@@ -851,7 +875,7 @@ Please extract the requested information or answer the question based on the con
               }
             }),
           execute: async ({ id, day, googlePlaceId, ...updates }) => {
-            const updatesToApply: any = { ...updates };
+            const updatesToApply: Record<string, unknown> = { ...updates };
             if (day !== undefined) {
               updatesToApply.dayIndex = day - 1;
             }
@@ -884,6 +908,10 @@ Please extract the requested information or answer the question based on the con
             if (!event) {
               return { output: "Itinerary item not found." };
             }
+            await logAiActivity(trip.id, user.id, "itinerary_event.updated", {
+              itineraryEventId: event.id,
+              updates: updatesToApply,
+            });
 
             return { output: `Itinerary item updated. [ID: ${event.id}]` };
           },
@@ -898,6 +926,9 @@ Please extract the requested information or answer the question based on the con
             if (!event) {
               return { output: "Itinerary item not found." };
             }
+            await logAiActivity(trip.id, user.id, "itinerary_event.deleted", {
+              itineraryEventId: event.id,
+            });
             return { output: `Itinerary item removed. [ID: ${event.id}]` };
           },
         }),
@@ -920,21 +951,23 @@ Please extract the requested information or answer the question based on the con
           const messagesToSave = [
             {
               id: nanoid(),
-              threadId: threadId,
+              threadId: thread.id,
+              authorUserId: user.id,
               role: lastUserMessage.role,
               content: lastUserMessage.parts as unknown[],
+              clientMessageId: lastUserMessage.id,
               createdAt: now,
             },
             ...assistantMessages.map((m, index) => ({
               id: nanoid(),
-              threadId: threadId,
+              threadId: thread.id,
               role: m.role,
               content: m.parts as unknown[],
               createdAt: new Date(now.getTime() + (index + 1) * 10), // Add 10ms offset per message
             })),
           ];
 
-          await db.insert(chatMessages).values(messagesToSave);
+          await appendMessagesToThread(thread.id, messagesToSave);
         } catch (error) {
           console.error("Failed to save chat messages:", error);
         }
@@ -944,4 +977,8 @@ Please extract the requested information or answer the question based on the con
     console.error("Travel agent chat error:", error);
     return new Response("Failed to process chat", { status: 500 });
   }
+}
+
+export async function POST(req: Request) {
+  return handleAiChatPost(req);
 }

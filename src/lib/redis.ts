@@ -1,27 +1,49 @@
-import { Redis } from "@upstash/redis";
+import { createClient } from "redis";
 
-export const redisClient = new Redis({
-  url: process.env.KV_REST_API_URL!,
-  token: process.env.KV_REST_API_TOKEN!,
-});
+const createRedisConnection = () => createClient({ url: getRedisUrl() });
+type AppRedisClient = ReturnType<typeof createRedisConnection>;
+
+let redisClientPromise: Promise<AppRedisClient> | null = null;
+
+const getRedisUrl = () => {
+  if (!process.env.REDIS_URL) {
+    throw new Error("REDIS_URL is not defined in environment variables");
+  }
+
+  return process.env.REDIS_URL;
+};
+
+async function getRedisClient() {
+  if (!redisClientPromise) {
+    const client = createRedisConnection();
+    client.on("error", (error) => {
+      console.error("Redis client error:", error);
+    });
+    redisClientPromise = client.connect().then(() => client as AppRedisClient);
+  }
+
+  return redisClientPromise;
+}
 
 class RedisService {
-  constructor(private readonly client: Redis) {}
-
-  async get(key: string): Promise<unknown | null> {
-    return this.client.get(key);
+  async get(key: string): Promise<string | null> {
+    const client = await getRedisClient();
+    return client.get(key);
   }
 
   async set(key: string, value: string, expiration?: number): Promise<void> {
+    const client = await getRedisClient();
+
     if (expiration) {
-      await this.client.set(key, value, { ex: expiration });
+      await client.set(key, value, { EX: expiration });
     } else {
-      await this.client.set(key, value);
+      await client.set(key, value);
     }
   }
 
   async del(key: string): Promise<void> {
-    await this.client.del(key);
+    const client = await getRedisClient();
+    await client.del(key);
   }
 
   async setJson(
@@ -29,8 +51,7 @@ class RedisService {
     value: unknown,
     expiration?: number,
   ): Promise<void> {
-    const jsonValue = JSON.stringify(value);
-    await this.set(key, jsonValue, expiration);
+    await this.set(key, JSON.stringify(value), expiration);
   }
 
   async getJson<T>(key: string): Promise<T | null> {
@@ -40,15 +61,11 @@ class RedisService {
       return null;
     }
 
-    if (typeof value === "string") {
-      try {
-        return JSON.parse(value) as T;
-      } catch {
-        return null;
-      }
+    try {
+      return JSON.parse(value) as T;
+    } catch {
+      return null;
     }
-
-    return value as T;
   }
 
   async cacheWrapper<T>(
@@ -67,4 +84,5 @@ class RedisService {
   }
 }
 
-export const redisCacheService = new RedisService(redisClient);
+export { getRedisClient };
+export const redisCacheService = new RedisService();

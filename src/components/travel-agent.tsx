@@ -105,7 +105,7 @@ function PlaceImage({ src, alt }: { src?: string; alt: string }) {
   }
 
   return (
-    // eslint-disable-next-line @next/next/no-img-element
+    // biome-ignore lint/performance/noImgElement: External provider thumbnails use direct img URLs.
     <img
       src={src}
       alt={alt}
@@ -304,9 +304,9 @@ export function TravelAgent({ tripId, trip, onTripChange }: TravelAgentProps) {
   const transport = useMemo(
     () =>
       new DefaultChatTransport({
-        api: "/api/chat",
+        api: `/api/trips/${encodeURIComponent(tripId)}/chat/ai`,
       }),
-    [],
+    [tripId],
   );
 
   // We use the tripId as the threadId for now, but we could later support multiple threads
@@ -334,9 +334,9 @@ export function TravelAgent({ tripId, trip, onTripChange }: TravelAgentProps) {
     onFinish: ({ message }) => {
       const textContent = message.parts
         ? message.parts
-          .filter(isTextUIPart)
-          .map((part) => part.text || "")
-          .join("")
+            .filter(isTextUIPart)
+            .map((part) => part.text || "")
+            .join("")
         : "";
 
       posthog.capture("travel_chat_response_received", {
@@ -441,7 +441,10 @@ export function TravelAgent({ tripId, trip, onTripChange }: TravelAgentProps) {
     setIsLoadingMore(true);
     try {
       const firstMessage = messagesRef.current[0];
-      const cursor = (firstMessage as any).createdAt;
+      const rawCursor = (firstMessage as { createdAt?: string | Date })
+        .createdAt;
+      const cursor =
+        rawCursor instanceof Date ? rawCursor.toISOString() : rawCursor;
 
       if (!cursor) {
         console.warn("First message has no createdAt, cannot load more");
@@ -455,7 +458,7 @@ export function TravelAgent({ tripId, trip, onTripChange }: TravelAgentProps) {
       );
 
       // Sync with useChat state
-      setMessages((current) => [...moreMessages, ...current] as any);
+      setMessages((current) => [...moreMessages, ...current]);
 
       // Sync with global store
       prependMessages(tripId, moreMessages, hasMore);
@@ -539,9 +542,9 @@ export function TravelAgent({ tripId, trip, onTripChange }: TravelAgentProps) {
         if (part.type === "tool-searchHotels" && output?.warnings?.length) {
           return (
             <div key={key} className="space-y-1">
-              {output.warnings.map((warning, warningIndex) => (
+              {output.warnings.map((warning) => (
                 <div
-                  key={`${toolKey}-warning-empty-${warningIndex}`}
+                  key={`${toolKey}-warning-empty-${warning}`}
                   className="text-xs text-muted-foreground"
                 >
                   {warning}
@@ -570,9 +573,9 @@ export function TravelAgent({ tripId, trip, onTripChange }: TravelAgentProps) {
           />
           {part.type === "tool-searchHotels" && output?.warnings?.length ? (
             <div className="mt-2 space-y-1">
-              {output.warnings.slice(0, 3).map((warning, warningIndex) => (
+              {output.warnings.slice(0, 3).map((warning) => (
                 <div
-                  key={`${toolKey}-warning-${warningIndex}`}
+                  key={`${toolKey}-warning-${warning}`}
                   className="text-xs text-muted-foreground"
                 >
                   {warning}
@@ -627,6 +630,12 @@ export function TravelAgent({ tripId, trip, onTripChange }: TravelAgentProps) {
               <span className="max-w-45 truncate">
                 {trip?.title ?? "Current Trip"}
               </span>
+              <Badge
+                variant="outline"
+                className="border-primary/20 bg-primary/5 text-primary"
+              >
+                Private to you
+              </Badge>
               {trip?.startDate && (
                 <Badge
                   variant="secondary"
@@ -734,7 +743,7 @@ export function TravelAgent({ tripId, trip, onTripChange }: TravelAgentProps) {
                         className={cn(
                           hasToolParts && "w-full",
                           message.role !== "user" &&
-                          "rounded-xl border bg-card text-card-foreground shadow-sm p-4",
+                            "rounded-xl border bg-card text-card-foreground shadow-sm p-4",
                         )}
                       >
                         {message.parts?.map((part, index) =>

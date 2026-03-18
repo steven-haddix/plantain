@@ -1,10 +1,10 @@
 "use client";
 
-import { ArrowRight, MapPinned } from "lucide-react";
+import { MapPinned } from "lucide-react";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import posthog from "posthog-js";
 import { useEffect, useRef, useState } from "react";
-import { Button } from "@/components/ui/button";
 import { authClient } from "@/lib/auth/client";
 
 export default function Home() {
@@ -52,45 +52,41 @@ export default function Home() {
   }
 
   return (
-    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[radial-gradient(ellipse_at_60%_30%,oklch(0.96_0.05_85),transparent_52%),linear-gradient(135deg,oklch(0.97_0.02_90),oklch(0.92_0.03_75))]">
-      {/* Soft ambient blobs */}
-      <div className="pointer-events-none absolute right-[15%] top-[12%] h-48 w-48 rounded-full bg-primary/10 blur-3xl" />
-      <div className="pointer-events-none absolute bottom-[14%] left-[12%] h-36 w-36 rounded-full bg-accent/30 blur-3xl" />
+    <div className="flex min-h-screen items-center justify-center bg-background">
+      <div className="w-full max-w-sm space-y-8 px-4">
 
-      {/* Card */}
-      <div className="relative w-full max-w-sm rounded-3xl border border-white/60 bg-white/85 px-10 py-12 shadow-[0_16px_56px_rgba(40,35,20,0.13)] backdrop-blur-xl">
-
-        {/* Brand pill */}
-        <div className="mb-6 inline-flex items-center gap-2 rounded-full bg-foreground px-3.5 py-1.5">
-          <MapPinned className="h-3.5 w-3.5 text-primary" />
-          <span className="text-xs font-bold uppercase tracking-[0.14em] text-background">
-            Plantain
-          </span>
+        {/* Brand */}
+        <div className="text-center space-y-1">
+          <div className="flex items-center justify-center gap-2 mb-3">
+            <MapPinned className="h-5 w-5 text-primary" />
+            <span className="text-xl font-extrabold tracking-tighter text-primary">
+              Plantain
+            </span>
+          </div>
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">
+            Welcome back
+          </h1>
+          <p className="text-sm text-muted-foreground">
+            Your collaborative trip planner.
+          </p>
         </div>
 
-        {/* Heading + tagline */}
-        <h1 className="text-[2rem] font-black leading-none tracking-[-0.045em] text-foreground">
-          Welcome back.
-        </h1>
-        <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-          Your collaborative trip planner.
-        </p>
-
-        {/* Sign-in button */}
-        <div className="mt-8 space-y-3">
-          <Button
-            className="h-12 w-full justify-between rounded-2xl px-5 text-sm font-semibold"
+        {/* Card */}
+        <div className="rounded-2xl border border-border bg-card p-8 shadow-sm space-y-4">
+          <button
             onClick={handleGoogleSignIn}
             disabled={isSigningIn}
+            className="flex h-11 w-full items-center justify-center gap-3 rounded-xl border border-border bg-background px-5 text-sm font-medium text-foreground transition-colors hover:bg-muted/50 disabled:opacity-50"
           >
-            <span>Continue with Google</span>
-            <ArrowRight className="h-4 w-4" />
-          </Button>
+            <Image src="/google_icon.png" alt="Google" width={18} height={18} />
+            Continue with Google
+          </button>
 
           {errorMessage ? (
-            <p className="text-sm text-destructive">{errorMessage}</p>
+            <p className="text-center text-xs text-destructive">{errorMessage}</p>
           ) : null}
         </div>
+
       </div>
     </div>
   );
