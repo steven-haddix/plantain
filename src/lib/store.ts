@@ -8,6 +8,7 @@ interface Trip {
   startDate: string | null;
   endDate: string | null;
   partySize?: number | null;
+  membershipRole?: "owner" | "member" | null;
   destinationLocation?: { latitude: number; longitude: number } | null;
   chatMessages?: UIMessage[];
   hasMoreMessages?: boolean;

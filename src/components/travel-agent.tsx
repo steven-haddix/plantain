@@ -651,7 +651,7 @@ export function TravelAgent({ tripId, trip, onTripChange }: TravelAgentProps) {
                   className="border-muted-foreground/20"
                 >
                   <Users className="mr-1 size-3" />
-                  {trip.partySize} travelers
+                  Group size {trip.partySize}
                 </Badge>
               ) : null}
             </div>

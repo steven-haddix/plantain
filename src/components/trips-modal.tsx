@@ -52,6 +52,7 @@ interface Trip {
   startDate: string | null;
   endDate: string | null;
   partySize?: number | null;
+  membershipRole?: "owner" | "member" | null;
   destinationLocation?: { latitude: number; longitude: number } | null;
 }
 
@@ -176,10 +177,12 @@ export function TripsModal({
   isOpen,
   onOpenChange,
   onSelect,
+  selectedTripId,
 }: {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
   onSelect: (trip: Trip) => void;
+  selectedTripId?: string | null;
 }) {
   const [trips, setTrips] = useState<Trip[]>([]);
   const [loading, setLoading] = useState(true);
@@ -267,7 +270,7 @@ export function TripsModal({
 
     try {
       setIsUpdating(true);
-      await updateTrip(tripId, {
+      const updatedTrip = await updateTrip(tripId, {
         title: editName,
         startDate: editDate?.from || null,
         endDate: editDate?.to || null,
@@ -277,6 +280,9 @@ export function TripsModal({
 
       toast.success("Trip updated successfully!");
       setEditingTripId(null);
+      if (selectedTripId === tripId) {
+        onSelect(updatedTrip as Trip);
+      }
       loadTrips(); // Reload to get updated data
     } catch (_error) {
       toast.error("Failed to update trip");
@@ -372,7 +378,7 @@ export function TripsModal({
                       htmlFor="edit-party-size"
                       className="text-xs font-medium text-muted-foreground uppercase tracking-wider"
                     >
-                      Travelers
+                      Group size
                     </Label>
                     <Input
                       id="edit-party-size"
@@ -380,7 +386,7 @@ export function TripsModal({
                       min={1}
                       max={100}
                       inputMode="numeric"
-                      placeholder="How many people?"
+                      placeholder="How many people are traveling?"
                       value={editPartySize}
                       onChange={(e) => setEditPartySize(e.target.value)}
                       className="bg-white/5 border-white/10 focus:border-primary/50"
@@ -495,7 +501,7 @@ export function TripsModal({
                       min={1}
                       max={100}
                       inputMode="numeric"
-                      placeholder="Travelers (optional)"
+                      placeholder="Group size (optional)"
                       value={newTripPartySize}
                       onChange={(e) => setNewTripPartySize(e.target.value)}
                       className="bg-white/5 border-white/10 focus:border-primary/50"
@@ -620,7 +626,7 @@ export function TripsModal({
                               <>
                                 <div className="w-px h-3 bg-white/20 mx-1" />
                                 <Users className="w-3 h-3" />
-                                {trip.partySize} travelers
+                                Group size {trip.partySize}
                               </>
                             ) : null}
                           </div>

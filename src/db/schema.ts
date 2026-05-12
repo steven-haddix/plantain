@@ -176,6 +176,48 @@ export const tripMembers = pgTable(
   ],
 );
 
+export const tripInvitationStatus = pgEnum("trip_invitation_status", [
+  "pending",
+  "accepted",
+  "revoked",
+]);
+
+export const tripInvitationRole = pgEnum("trip_invitation_role", ["member"]);
+
+export const tripInvitations = pgTable(
+  "trip_invitations",
+  {
+    id: text("id").primaryKey(),
+    tripId: text("trip_id")
+      .notNull()
+      .references(() => trips.id, { onDelete: "cascade" }),
+    email: text("email").notNull(),
+    normalizedEmail: text("normalized_email").notNull(),
+    status: tripInvitationStatus("status").notNull().default("pending"),
+    role: tripInvitationRole("role").notNull().default("member"),
+    token: text("token").notNull(),
+    invitedByUserId: text("invited_by_user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    acceptedByUserId: text("accepted_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .default(sql`now()`),
+    acceptedAt: timestamp("accepted_at", { withTimezone: true }),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+  },
+  (table) => [
+    uniqueIndex("trip_invitations_token_unique").on(table.token),
+    index("trip_invitations_trip_status_idx").on(table.tripId, table.status),
+    index("trip_invitations_trip_email_idx").on(
+      table.tripId,
+      table.normalizedEmail,
+    ),
+  ],
+);
+
 export const places = pgTable(
   "places",
   {
@@ -343,6 +385,7 @@ export type Account = typeof accounts.$inferSelect;
 export type Verification = typeof verifications.$inferSelect;
 export type Trip = typeof trips.$inferSelect;
 export type TripMember = typeof tripMembers.$inferSelect;
+export type TripInvitation = typeof tripInvitations.$inferSelect;
 export type Place = typeof places.$inferSelect;
 export type SavedLocation = typeof savedLocations.$inferSelect;
 export type ItineraryEvent = typeof itineraryEvents.$inferSelect;

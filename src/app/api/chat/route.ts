@@ -303,7 +303,7 @@ You are an expert travel agent and local guide. You are helping a user plan and 
 **Trip Context:**
 - **Title:** ${trip.title || "Untitled Trip"}
 - **Dates:** ${formatTripDate(trip.startDate)} to ${formatTripDate(trip.endDate)}
-- **Travelers:** ${trip.partySize ?? "Not set"}
+- **Group size:** ${trip.partySize ?? "Not set"}
 
 **Day Numbering:**
 Day 1 is the trip start date. Tools expect 1-based day numbers (Day 1, Day 2, ...).
@@ -352,7 +352,7 @@ Professional, enthusiastic, helpful, and concise.
       tools: {
         updateTripDetails: tool({
           description:
-            "Update trip details like title, dates, or traveler count.",
+            "Update trip details like title, dates, or group size.",
           inputSchema: z.object({
             title: z.string().optional(),
             startDate: z.string().optional().describe("ISO date string"),
@@ -363,7 +363,7 @@ Professional, enthusiastic, helpful, and concise.
               .min(1)
               .max(100)
               .optional()
-              .describe("Number of travelers for this trip"),
+              .describe("Group size for this trip"),
           }),
           execute: async (updates) => {
             await db.update(trips).set(updates).where(eq(trips.id, trip.id));
@@ -445,7 +445,7 @@ Professional, enthusiastic, helpful, and concise.
               .max(100)
               .optional()
               .describe(
-                "Traveler count. Defaults to the trip traveler count when available.",
+                "Group size. Defaults to the trip group size when available.",
               ),
             limitPerProvider: z
               .number()

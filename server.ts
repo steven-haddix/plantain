@@ -102,23 +102,82 @@ async function main() {
     console.log(`> Team chat sockets attached at /team-chat/socket`);
   });
 
-  const shutdown = async () => {
-    io.close();
-    await subscriber.quit();
-    httpServer.close((error) => {
-      if (error) {
-        console.error("Failed to close HTTP server cleanly:", error);
+  let shutdownPromise: Promise<void> | null = null;
+
+  const shutdown = (signal: NodeJS.Signals) => {
+    if (shutdownPromise) {
+      return shutdownPromise;
+    }
+
+    console.log(`\n> Received ${signal}, shutting down gracefully...`);
+
+    const forceExitTimer = setTimeout(() => {
+      console.error("Shutdown timed out, forcing exit.");
+      process.exit(1);
+    }, 10_000);
+    forceExitTimer.unref();
+
+    shutdownPromise = (async () => {
+      const results = await Promise.allSettled([
+        new Promise<void>((resolve) => {
+          io.close(() => {
+            resolve();
+          });
+        }),
+        new Promise<void>((resolve, reject) => {
+          httpServer.close((error) => {
+            if (error) {
+              reject(error);
+              return;
+            }
+
+            resolve();
+          });
+        }),
+        (async () => {
+          if (!subscriber.isOpen) {
+            return;
+          }
+
+          try {
+            await subscriber.quit();
+          } catch (error) {
+            if (
+              error instanceof Error &&
+              error.message === "The client is closed"
+            ) {
+              return;
+            }
+
+            throw error;
+          }
+        })(),
+      ]);
+
+      let exitCode = 0;
+      for (const result of results) {
+        if (result.status === "rejected") {
+          exitCode = 1;
+          console.error("Graceful shutdown step failed:", result.reason);
+        }
       }
-      process.exit(error ? 1 : 0);
-    });
+
+      clearTimeout(forceExitTimer);
+      process.exit(exitCode);
+    })();
+
+    return shutdownPromise;
   };
 
-  process.on("SIGINT", () => {
-    void shutdown();
+  process.once("SIGINT", () => {
+    void shutdown("SIGINT");
   });
-  process.on("SIGTERM", () => {
-    void shutdown();
+  process.once("SIGTERM", () => {
+    void shutdown("SIGTERM");
   });
 }
 
-void main();
+void main().catch((error) => {
+  console.error("Server failed to start:", error);
+  process.exit(1);
+});

@@ -3,7 +3,7 @@ import { nanoid } from "nanoid";
 import { db } from "@/db";
 import { tripMembers, trips, users } from "@/db/schema";
 
-export async function assertTripMemberAccess(tripId: string, userId: string) {
+async function getTripAccessRecord(tripId: string, userId: string) {
   const [trip] = await db
     .select({
       ...getTableColumns(trips),
@@ -25,6 +25,12 @@ export async function assertTripMemberAccess(tripId: string, userId: string) {
     throw new Error("Trip not found");
   }
 
+  return trip;
+}
+
+export async function assertTripMemberAccess(tripId: string, userId: string) {
+  const trip = await getTripAccessRecord(tripId, userId);
+
   return {
     ...trip,
     destinationLocation:
@@ -35,6 +41,16 @@ export async function assertTripMemberAccess(tripId: string, userId: string) {
           }
         : null,
   };
+}
+
+export async function assertTripOwnerAccess(tripId: string, userId: string) {
+  const trip = await assertTripMemberAccess(tripId, userId);
+
+  if (trip.membershipRole !== "owner" && trip.ownerId !== userId) {
+    throw new Error("Forbidden");
+  }
+
+  return trip;
 }
 
 export async function ensureOwnerTripMembership(

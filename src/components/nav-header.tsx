@@ -2,14 +2,19 @@
 
 import { ChevronDown, MapPin } from "lucide-react";
 import { useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { TripsModal } from "@/components/trips-modal";
 import { Button } from "@/components/ui/button";
 import { UserMenu } from "@/components/user-menu";
 import { authClient } from "@/lib/auth/client";
+import { buildDashboardHref, withDashboardTrip } from "@/lib/dashboard-url";
 import { useAppStore } from "@/lib/store";
 
 export function NavHeader() {
   const { data: session, isPending } = authClient.useSession();
+  const pathname = usePathname();
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const activeTrip = useAppStore((state) => state.activeTrip);
   const setActiveTrip = useAppStore((state) => state.setActiveTrip);
   const [isTripsModalOpen, setIsTripsModalOpen] = useState(false);
@@ -42,8 +47,18 @@ export function NavHeader() {
       <TripsModal
         isOpen={isTripsModalOpen}
         onOpenChange={setIsTripsModalOpen}
+        selectedTripId={activeTrip?.id ?? null}
         onSelect={(trip) => {
           setActiveTrip(trip);
+          const nextHref =
+            pathname === "/dashboard"
+              ? withDashboardTrip(searchParams, trip.id)
+              : buildDashboardHref(
+                  new URLSearchParams({
+                    trip: trip.id,
+                  }),
+                );
+          router.replace(nextHref);
           setIsTripsModalOpen(false);
         }}
       />

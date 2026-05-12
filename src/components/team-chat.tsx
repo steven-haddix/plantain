@@ -1,13 +1,16 @@
 "use client";
 
 import { MessageSquare, Send, Users, Wifi, WifiOff } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { io, type Socket } from "socket.io-client";
+import { TripPeopleSheet } from "@/components/trip-people-sheet";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { CHAT_HISTORY_LIMIT } from "@/lib/constants";
+import { updateDashboardSearchParams } from "@/lib/dashboard-url";
 import { cn } from "@/lib/utils";
 
 type TeamChatMessage = {
@@ -30,6 +33,15 @@ type TeamChatMember = {
   email: string | null;
   avatarUrl: string | null;
   role: string;
+};
+
+type PendingTripInvite = {
+  id: string;
+  email: string;
+  status: string;
+  role: string;
+  createdAt: string | Date;
+  shareUrl: string;
 };
 
 type CurrentUser = {
@@ -80,8 +92,14 @@ export function TeamChat({
   currentUser: CurrentUser;
   active: boolean;
 }) {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [messages, setMessages] = useState<TeamChatMessage[]>([]);
   const [members, setMembers] = useState<TeamChatMember[]>([]);
+  const [pendingInvites, setPendingInvites] = useState<PendingTripInvite[]>([]);
+  const [currentUserRole, setCurrentUserRole] = useState<
+    "owner" | "member" | null
+  >(null);
   const [hasMore, setHasMore] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
@@ -92,8 +110,44 @@ export function TeamChat({
   >("disconnected");
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const socketRef = useRef<Socket | null>(null);
+  const isPeopleOpen = searchParams.get("people") === "1";
 
   const memberPreview = useMemo(() => members.slice(0, 5), [members]);
+
+  const setPeopleOpen = (open: boolean) => {
+    router.replace(
+      updateDashboardSearchParams(searchParams, (params) => {
+        if (open) {
+          params.set("people", "1");
+        } else {
+          params.delete("people");
+        }
+      }),
+    );
+  };
+
+  const loadPeople = useCallback(async () => {
+    const response = await fetch(
+      `/api/trips/${encodeURIComponent(tripId)}/people`,
+      {
+        credentials: "include",
+      },
+    );
+
+    if (!response.ok) {
+      throw new Error("Failed to load trip people.");
+    }
+
+    const data = (await response.json()) as {
+      currentUserRole?: "owner" | "member";
+      members?: TeamChatMember[];
+      pendingInvites?: PendingTripInvite[];
+    };
+
+    setMembers(data.members ?? []);
+    setCurrentUserRole(data.currentUserRole ?? null);
+    setPendingInvites(data.pendingInvites ?? []);
+  }, [tripId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -101,12 +155,15 @@ export function TeamChat({
     const load = async () => {
       setIsLoading(true);
       try {
-        const response = await fetch(
-          `/api/trips/${encodeURIComponent(tripId)}/chat/team/messages?limit=${CHAT_HISTORY_LIMIT}`,
-          {
-            credentials: "include",
-          },
-        );
+        const [response] = await Promise.all([
+          fetch(
+            `/api/trips/${encodeURIComponent(tripId)}/chat/team/messages?limit=${CHAT_HISTORY_LIMIT}`,
+            {
+              credentials: "include",
+            },
+          ),
+          loadPeople(),
+        ]);
 
         if (!response.ok) {
           throw new Error("Failed to load team chat.");
@@ -122,7 +179,9 @@ export function TeamChat({
 
         setMessages(data.messages ?? []);
         setHasMore(Boolean(data.hasMore));
-        setMembers(data.members ?? []);
+        if ((data.members ?? []).length > 0) {
+          setMembers(data.members ?? []);
+        }
       } catch (error) {
         if (!cancelled) {
           console.error(error);
@@ -139,7 +198,7 @@ export function TeamChat({
     return () => {
       cancelled = true;
     };
-  }, [tripId]);
+  }, [loadPeople, tripId]);
 
   useEffect(() => {
     const scroller = scrollRef.current;
@@ -332,6 +391,21 @@ export function TeamChat({
               {connectionState === "connected" ? "Live" : "Offline"}
             </Badge>
             <Badge variant="secondary">{members.length} members</Badge>
+            <Button
+              type="button"
+              size="sm"
+              variant="secondary"
+              className="h-7 rounded-full px-3"
+              onClick={() => setPeopleOpen(true)}
+            >
+              <Users className="size-3.5" />
+              People
+              {currentUserRole === "owner" && pendingInvites.length > 0 ? (
+                <span className="ml-1 rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary">
+                  {pendingInvites.length}
+                </span>
+              ) : null}
+            </Button>
           </div>
         </div>
         <div className="flex items-center -space-x-2">
@@ -466,6 +540,17 @@ export function TeamChat({
           </div>
         </div>
       </div>
+
+      <TripPeopleSheet
+        tripId={tripId}
+        tripTitle={tripTitle}
+        currentUserRole={currentUserRole}
+        members={members}
+        pendingInvites={pendingInvites}
+        open={isPeopleOpen}
+        onOpenChange={setPeopleOpen}
+        onPeopleChanged={loadPeople}
+      />
     </div>
   );
 }
