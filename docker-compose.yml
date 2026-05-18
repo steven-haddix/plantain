@@ -24,7 +24,7 @@ services:
     container_name: plantain-redis
     command: ["redis-server", "--appendonly", "yes"]
     ports:
-      - "${PLANTAIN_REDIS_PORT:-6380}:6379"
+      - "${PLANTAIN_REDIS_PORT:-6381}:6379"
     volumes:
       - redis_data:/data
     healthcheck:

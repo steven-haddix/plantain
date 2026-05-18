@@ -13,10 +13,10 @@
     "format": "biome format --write"
   },
   "dependencies": {
-    "@ai-sdk/anthropic": "^3.0.0-beta.96",
-    "@ai-sdk/google": "^3.0.0-beta.88",
-    "@ai-sdk/openai": "^3.0.0-beta.111",
-    "@ai-sdk/react": "^3.0.0-beta.169",
+    "@ai-sdk/anthropic": "^3.0.78",
+    "@ai-sdk/google": "^3.0.75",
+    "@ai-sdk/openai": "^3.0.64",
+    "@ai-sdk/react": "^3.0.186",
     "@better-auth/drizzle-adapter": "1.5.5",
     "@hookform/resolvers": "^5.2.2",
     "@langfuse/otel": "^4.5.1",
@@ -57,7 +57,7 @@
     "@upstash/redis": "^1.36.0",
     "@vercel/otel": "^2.1.0",
     "@xyflow/react": "^12.10.0",
-    "ai": "^6.0.3",
+    "ai": "^6.0.184",
     "better-auth": "1.5.5",
     "browser-image-compression": "^2.0.2",
     "cheerio": "^1.1.2",

@@ -1,6 +1,6 @@
 "use server";
 
-import type { GoogleGenerativeAIProviderOptions } from "@ai-sdk/google";
+import { type GoogleGenerativeAIProviderOptions, google } from "@ai-sdk/google";
 import { generateText, Output } from "ai";
 import { and, eq, getTableColumns, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
@@ -70,7 +70,7 @@ const classifyPlaceCategory = async (
 
   try {
     const { output } = await generateText({
-      model: "google/gemini-3-flash",
+      model: google("gemini-3.1-flash-lite"),
       output: Output.object({
         schema: z.object({
           category: z.enum(PLACE_CATEGORIES),

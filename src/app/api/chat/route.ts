@@ -1,4 +1,4 @@
-import type { GoogleGenerativeAIProviderOptions } from "@ai-sdk/google";
+import { type GoogleGenerativeAIProviderOptions, google } from "@ai-sdk/google";
 import {
   createAgentUIStreamResponse,
   createIdGenerator,
@@ -338,7 +338,7 @@ Professional, enthusiastic, helpful, and concise.
 `;
 
     const agent = new ToolLoopAgent({
-      model: "google/gemini-3-flash",
+      model: google("gemini-3.1-pro-preview"),
       instructions: systemPrompt,
       providerOptions: {
         google: {
@@ -351,8 +351,7 @@ Professional, enthusiastic, helpful, and concise.
       experimental_telemetry: { isEnabled: true },
       tools: {
         updateTripDetails: tool({
-          description:
-            "Update trip details like title, dates, or group size.",
+          description: "Update trip details like title, dates, or group size.",
           inputSchema: z.object({
             title: z.string().optional(),
             startDate: z.string().optional().describe("ISO date string"),
@@ -581,7 +580,7 @@ Professional, enthusiastic, helpful, and concise.
             if (instruction) {
               try {
                 const { text } = await generateText({
-                  model: "google/gemini-3-flash",
+                  model: google("gemini-3.1-pro-preview"),
                   prompt: `
 You are a helpful assistant.
 Context: The user wants to find information on a webpage.
