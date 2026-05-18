@@ -2,6 +2,7 @@ import { and, asc, eq, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { db } from "@/db";
 import { itineraryEvents, places } from "@/db/schema";
+import { generateKeyBetween } from "./sort-keys";
 
 export type ItineraryEventBucket =
   | "morning"
@@ -17,7 +18,7 @@ export type ItineraryEventCreateInput = {
   customTitle?: string | null;
   dayIndex: number;
   bucket?: ItineraryEventBucket;
-  sortOrder?: number;
+  sortOrder?: string;
   isOptional?: boolean;
   status?: ItineraryEventStatus;
   sourceSavedLocationId?: string | null;
@@ -42,7 +43,7 @@ export type ItineraryEventListItem = {
   customTitle: string | null;
   dayIndex: number;
   bucket: ItineraryEventBucket;
-  sortOrder: number;
+  sortOrder: string;
   isOptional: boolean;
   status: ItineraryEventStatus;
   sourceSavedLocationId: string | null;
@@ -98,12 +99,12 @@ export class TripService {
         sourceSavedLocationId: itineraryEvents.sourceSavedLocationId,
         metadata: itineraryEvents.metadata,
         placeDetails: places.details,
-        placeLatitude: sql<number | null>`ST_Y(${places.location}::geometry)`.as(
-          "place_latitude",
-        ),
-        placeLongitude: sql<number | null>`ST_X(${places.location}::geometry)`.as(
-          "place_longitude",
-        ),
+        placeLatitude: sql<
+          number | null
+        >`ST_Y(${places.location}::geometry)`.as("place_latitude"),
+        placeLongitude: sql<
+          number | null
+        >`ST_X(${places.location}::geometry)`.as("place_longitude"),
       })
       .from(itineraryEvents)
       .leftJoin(places, eq(itineraryEvents.placeId, places.id))
@@ -154,6 +155,11 @@ export class TripService {
       throw new Error("Provide either placeId or customTitle.");
     }
 
+    const bucket = input.bucket ?? "anytime";
+    const sortOrder =
+      input.sortOrder ??
+      (await this.nextSortKey(tripId, input.dayIndex, bucket));
+
     const [event] = await db
       .insert(itineraryEvents)
       .values({
@@ -162,8 +168,8 @@ export class TripService {
         placeId,
         customTitle,
         dayIndex: input.dayIndex,
-        bucket: input.bucket ?? "anytime",
-        sortOrder: input.sortOrder ?? 0,
+        bucket,
+        sortOrder,
         isOptional: input.isOptional ?? false,
         status: input.status ?? "proposed",
         sourceSavedLocationId: input.sourceSavedLocationId ?? null,
@@ -172,6 +178,27 @@ export class TripService {
       .returning();
 
     return event ?? null;
+  }
+
+  private async nextSortKey(
+    tripId: string,
+    dayIndex: number,
+    bucket: ItineraryEventBucket,
+  ): Promise<string> {
+    const [row] = await db
+      .select({ sortOrder: itineraryEvents.sortOrder })
+      .from(itineraryEvents)
+      .where(
+        and(
+          eq(itineraryEvents.tripId, tripId),
+          eq(itineraryEvents.dayIndex, dayIndex),
+          eq(itineraryEvents.bucket, bucket),
+        ),
+      )
+      .orderBy(sql`${itineraryEvents.sortOrder} desc`)
+      .limit(1);
+
+    return generateKeyBetween(row?.sortOrder ?? null, null);
   }
 
   async updateItineraryEvent(

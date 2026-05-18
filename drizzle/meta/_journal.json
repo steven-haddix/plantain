@@ -71,6 +71,13 @@
       "when": 1773973925124,
       "tag": "0009_modern_galactus",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1779070889052,
+      "tag": "0010_strange_stephen_strange",
+      "breakpoints": true
     }
   ]
 }

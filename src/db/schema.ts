@@ -292,7 +292,7 @@ export const itineraryEvents = pgTable(
     customTitle: text("custom_title"),
     dayIndex: integer("day_index").notNull(),
     bucket: itineraryEventBucket("bucket").notNull().default("anytime"),
-    sortOrder: integer("sort_order").notNull().default(0),
+    sortOrder: text("sort_order").notNull(),
     isOptional: boolean("is_optional").notNull().default(false),
     status: itineraryEventStatus("status").notNull().default("proposed"),
     sourceSavedLocationId: text("source_saved_location_id").references(

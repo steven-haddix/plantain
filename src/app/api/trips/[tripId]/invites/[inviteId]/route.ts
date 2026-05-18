@@ -6,9 +6,7 @@ import {
 
 export async function DELETE(
   req: Request,
-  {
-    params,
-  }: { params: Promise<{ tripId: string; inviteId: string }> },
+  { params }: { params: Promise<{ tripId: string; inviteId: string }> },
 ) {
   const session = await getRequestAuthSession(req);
   const user = session?.user;

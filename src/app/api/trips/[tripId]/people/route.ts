@@ -1,9 +1,9 @@
 import { getRequestAuthSession } from "@/lib/auth";
+import { assertTripMemberAccess, listTripMembers } from "@/lib/trip-access";
 import {
   createTripInviteShareUrl,
   listPendingTripInvitations,
 } from "@/lib/trip-invitations";
-import { assertTripMemberAccess, listTripMembers } from "@/lib/trip-access";
 
 export async function GET(
   req: Request,

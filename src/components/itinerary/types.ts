@@ -15,7 +15,7 @@ export type ItineraryEventListItem = {
   customTitle: string | null;
   dayIndex: number;
   bucket: ItineraryEventBucket;
-  sortOrder: number;
+  sortOrder: string;
   isOptional: boolean;
   status: ItineraryEventStatus;
   sourceSavedLocationId: string | null;

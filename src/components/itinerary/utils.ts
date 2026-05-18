@@ -32,7 +32,7 @@ export function groupEventsByBucket(
   }
 
   for (const bucket of bucketOrder) {
-    grouped[bucket].sort((a, b) => a.sortOrder - b.sortOrder);
+    grouped[bucket].sort((a, b) => a.sortOrder.localeCompare(b.sortOrder));
   }
 
   return grouped;

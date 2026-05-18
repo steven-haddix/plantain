@@ -765,7 +765,6 @@ Please extract the requested information or answer the question based on the con
               bucket: z
                 .enum(["morning", "afternoon", "evening", "night", "anytime"])
                 .optional(),
-              sortOrder: z.number().optional(),
               isOptional: z.boolean().optional(),
               status: z.enum(["proposed", "confirmed", "canceled"]).optional(),
               sourceSavedLocationId: z.string().optional(),
@@ -858,7 +857,6 @@ Please extract the requested information or answer the question based on the con
               bucket: z
                 .enum(["morning", "afternoon", "evening", "night", "anytime"])
                 .optional(),
-              sortOrder: z.number().optional(),
               isOptional: z.boolean().optional(),
               status: z.enum(["proposed", "confirmed", "canceled"]).optional(),
               sourceSavedLocationId: z.string().nullable().optional(),

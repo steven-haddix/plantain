@@ -1,6 +1,9 @@
 "use client";
 
+import { useSortable } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import { MapPin, Sparkles } from "lucide-react";
+import type { CSSProperties } from "react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import type { ItineraryEventListItem } from "./types";
@@ -17,14 +20,68 @@ const statusVariant = (status: ItineraryEventListItem["status"]) => {
   }
 };
 
+export type ItineraryEventCardProps = {
+  event: ItineraryEventListItem;
+  isSelected: boolean;
+  onSelect: (event: ItineraryEventListItem) => void;
+  /** When true, the card is rendered as a static overlay (no sortable wiring). */
+  overlay?: boolean;
+};
+
 export function ItineraryEventCard({
   event,
   isSelected,
   onSelect,
+  overlay = false,
+}: ItineraryEventCardProps) {
+  const sortable = useSortable({
+    id: `event:${event.id}`,
+    data: { type: "event", event },
+    disabled: overlay,
+  });
+
+  const style: CSSProperties = overlay
+    ? {}
+    : {
+        transform: CSS.Translate.toString(sortable.transform),
+        transition: sortable.transition,
+      };
+
+  return (
+    <CardBody
+      event={event}
+      isSelected={isSelected}
+      onSelect={onSelect}
+      overlay={overlay}
+      isDragging={sortable.isDragging}
+      style={style}
+      setNodeRef={overlay ? undefined : sortable.setNodeRef}
+      attributes={overlay ? undefined : sortable.attributes}
+      listeners={overlay ? undefined : sortable.listeners}
+    />
+  );
+}
+
+function CardBody({
+  event,
+  isSelected,
+  onSelect,
+  overlay,
+  isDragging,
+  style,
+  setNodeRef,
+  attributes,
+  listeners,
 }: {
   event: ItineraryEventListItem;
   isSelected: boolean;
   onSelect: (event: ItineraryEventListItem) => void;
+  overlay: boolean;
+  isDragging: boolean;
+  style: CSSProperties;
+  setNodeRef?: (node: HTMLElement | null) => void;
+  attributes?: ReturnType<typeof useSortable>["attributes"];
+  listeners?: ReturnType<typeof useSortable>["listeners"];
 }) {
   const title = eventDisplayTitle(event);
   const Icon = event.placeGooglePlaceId ? MapPin : Sparkles;
@@ -32,10 +89,17 @@ export function ItineraryEventCard({
   return (
     <button
       type="button"
-      onClick={() => onSelect(event)}
+      ref={setNodeRef}
+      style={style}
+      onClick={() => !overlay && onSelect(event)}
+      aria-roledescription="sortable"
+      {...attributes}
+      {...listeners}
       className={cn(
         "group relative flex min-w-0 w-full flex-col gap-3 rounded-xl border bg-background/70 p-3 text-left backdrop-blur transition-all hover:bg-accent/50 hover:shadow-sm",
         isSelected && "border-primary/50 ring-1 ring-primary/20",
+        isDragging && !overlay && "opacity-30",
+        overlay && "shadow-xl rotate-1 cursor-grabbing bg-background/95",
       )}
     >
       <div className="flex min-w-0 w-full items-start justify-between gap-3">
@@ -44,14 +108,15 @@ export function ItineraryEventCard({
             <Icon className="size-4" />
           </div>
           <div className="min-w-0">
-            <div className="truncate text-sm font-semibold text-foreground/90">{title}</div>
+            <div className="truncate text-sm font-semibold text-foreground/90">
+              {title}
+            </div>
             {event.placeAddress ? (
               <div className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">
                 {event.placeAddress}
               </div>
             ) : null}
 
-            {/* Optional time/bucket display since we removed headers */}
             <div className="mt-1.5 flex items-center gap-2">
               <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/70">
                 {event.bucket}
@@ -60,11 +125,13 @@ export function ItineraryEventCard({
           </div>
         </div>
 
-        {/* Status Badge */}
         {event.status !== "proposed" || event.isOptional ? (
           <div className="flex shrink-0 flex-col items-end gap-1">
             {event.status !== "proposed" && (
-              <Badge variant={statusVariant(event.status)} className="h-5 px-1.5 text-[10px] capitalize">
+              <Badge
+                variant={statusVariant(event.status)}
+                className="h-5 px-1.5 text-[10px] capitalize"
+              >
                 {event.status}
               </Badge>
             )}
@@ -75,7 +142,6 @@ export function ItineraryEventCard({
             ) : null}
           </div>
         ) : null}
-
       </div>
     </button>
   );

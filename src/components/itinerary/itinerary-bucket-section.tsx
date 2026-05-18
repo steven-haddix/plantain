@@ -1,49 +1,68 @@
 "use client";
 
-import { Plus } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { useDroppable } from "@dnd-kit/core";
+import {
+  SortableContext,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
 import { cn } from "@/lib/utils";
 import { ItineraryEventCard } from "./itinerary-event-card";
 import type { ItineraryEventBucket, ItineraryEventListItem } from "./types";
 import { bucketLabel } from "./utils";
 
 export function ItineraryBucketSection({
+  dayIndex,
   bucket,
   events,
   selectedEventId,
   onSelectEvent,
-  onAdd,
+  expanded,
 }: {
+  dayIndex: number;
   bucket: ItineraryEventBucket;
   events: ItineraryEventListItem[];
   selectedEventId?: string;
   onSelectEvent: (event: ItineraryEventListItem) => void;
-  onAdd?: (bucket: ItineraryEventBucket) => void;
+  /** When true: show the bucket label and an empty-state drop slot. */
+  expanded: boolean;
 }) {
+  const { setNodeRef, isOver } = useDroppable({
+    id: `bucket:${dayIndex}:${bucket}`,
+    data: { type: "bucket", dayIndex, bucket },
+  });
+
+  // In compact mode an empty bucket renders nothing.
+  if (!expanded && events.length === 0) {
+    return null;
+  }
+
   return (
-    <section className="space-y-3">
-      <div className="flex items-center justify-between">
-        <div className="flex items-baseline gap-2">
-          <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/80">
+    <section
+      ref={setNodeRef}
+      className={cn(
+        "transition-colors",
+        expanded && "rounded-xl",
+        expanded && isOver && "bg-accent/30 ring-1 ring-primary/30",
+      )}
+    >
+      {expanded ? (
+        <div className="mb-1.5 flex items-baseline gap-2 px-1">
+          <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/80">
             {bucketLabel[bucket]}
           </div>
-          <div className="text-xs text-muted-foreground">{events.length}</div>
+          {events.length ? (
+            <div className="text-[10px] text-muted-foreground/60">
+              {events.length}
+            </div>
+          ) : null}
         </div>
-        {onAdd ? (
-          <Button
-            size="icon"
-            variant="ghost"
-            className="size-8"
-            onClick={() => onAdd(bucket)}
-            aria-label={`Add to ${bucketLabel[bucket]}`}
-          >
-            <Plus className="size-4" />
-          </Button>
-        ) : null}
-      </div>
+      ) : null}
 
-      {events.length ? (
-        <div className="space-y-2">
+      <SortableContext
+        items={events.map((e) => `event:${e.id}`)}
+        strategy={verticalListSortingStrategy}
+      >
+        <div className={cn(expanded ? "space-y-2" : "space-y-6")}>
           {events.map((event) => (
             <ItineraryEventCard
               key={event.id}
@@ -52,16 +71,18 @@ export function ItineraryBucketSection({
               onSelect={onSelectEvent}
             />
           ))}
+          {expanded && events.length === 0 ? (
+            <div
+              className={cn(
+                "rounded-xl border border-dashed bg-background/40 px-3 py-3 text-center text-[11px] text-muted-foreground/70",
+                isOver && "border-primary/40 text-foreground/80",
+              )}
+            >
+              Drop here
+            </div>
+          ) : null}
         </div>
-      ) : (
-        <div
-          className={cn(
-            "rounded-xl border border-dashed bg-background/40 p-3 text-xs text-muted-foreground",
-          )}
-        >
-          Drag items here or add a big rock.
-        </div>
-      )}
+      </SortableContext>
     </section>
   );
 }
