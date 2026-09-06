@@ -1,4 +1,5 @@
 import { createClient } from "redis";
+import { namespacedRedisKey } from "./redis-namespace";
 
 const createRedisConnection = () => createClient({ url: getRedisUrl() });
 type AppRedisClient = ReturnType<typeof createRedisConnection>;
@@ -28,22 +29,23 @@ async function getRedisClient() {
 class RedisService {
   async get(key: string): Promise<string | null> {
     const client = await getRedisClient();
-    return client.get(key);
+    return client.get(namespacedRedisKey(key));
   }
 
   async set(key: string, value: string, expiration?: number): Promise<void> {
     const client = await getRedisClient();
+    const namespacedKey = namespacedRedisKey(key);
 
     if (expiration) {
-      await client.set(key, value, { EX: expiration });
+      await client.set(namespacedKey, value, { EX: expiration });
     } else {
-      await client.set(key, value);
+      await client.set(namespacedKey, value);
     }
   }
 
   async del(key: string): Promise<void> {
     const client = await getRedisClient();
-    await client.del(key);
+    await client.del(namespacedRedisKey(key));
   }
 
   async setJson(

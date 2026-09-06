@@ -6,6 +6,11 @@ import {
   teamChatSocketRoom,
   verifyTeamChatSocketToken,
 } from "./src/lib/chat/realtime";
+import {
+  getRedisNamespace,
+  parseTeamChatRedisChannel,
+  teamChatRedisSubscriptionPattern,
+} from "./src/lib/redis-namespace";
 
 const dev = process.env.NODE_ENV !== "production";
 const hostname = process.env.HOSTNAME || "0.0.0.0";
@@ -42,25 +47,27 @@ async function main() {
     console.error("Redis subscriber error:", error);
   });
   await subscriber.connect();
-  await subscriber.pSubscribe("trip:*:chat", (message, channel) => {
-    try {
-      const payload = JSON.parse(message) as {
-        tripId?: string;
-        event?: string;
-        data?: unknown;
-      };
-      const parts = channel.split(":");
-      const tripId = payload.tripId ?? parts[1];
-      if (!tripId) return;
+  const redisNamespace = getRedisNamespace();
+  await subscriber.pSubscribe(
+    teamChatRedisSubscriptionPattern(redisNamespace),
+    (message, channel) => {
+      try {
+        const payload = JSON.parse(message) as {
+          event?: string;
+          data?: unknown;
+        };
+        const tripId = parseTeamChatRedisChannel(channel, redisNamespace);
+        if (!tripId) return;
 
-      io.to(teamChatSocketRoom(tripId)).emit(
-        payload.event ?? "chat.message.created",
-        payload.data ?? payload,
-      );
-    } catch (error) {
-      console.error("Failed to fan out Redis message:", error);
-    }
-  });
+        io.to(teamChatSocketRoom(tripId)).emit(
+          payload.event ?? "chat.message.created",
+          payload.data ?? payload,
+        );
+      } catch (error) {
+        console.error("Failed to fan out Redis message:", error);
+      }
+    },
+  );
 
   io.use((socket, nextSocket) => {
     const token =

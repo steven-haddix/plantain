@@ -2,7 +2,7 @@
 
 import dynamic from "next/dynamic";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect } from "react";
+import { Suspense, useEffect } from "react";
 import { mutate } from "swr";
 import { toast } from "sonner";
 import { getChatMessages, getTrips } from "@/app/actions/trips";
@@ -28,6 +28,22 @@ const LeafletMap = dynamic(() => import("@/components/map"), {
 });
 
 export default function Dashboard() {
+  return (
+    <Suspense fallback={<DashboardLoading />}>
+      <DashboardContent />
+    </Suspense>
+  );
+}
+
+function DashboardLoading() {
+  return (
+    <div className="flex min-h-screen items-center justify-center">
+      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+    </div>
+  );
+}
+
+function DashboardContent() {
   const { data, isPending } = authClient.useSession();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -123,11 +139,7 @@ export default function Dashboard() {
   }, [inviteState, router, searchParams]);
 
   if (isPending) {
-    return (
-      <div className="flex min-h-screen items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-      </div>
-    );
+    return <DashboardLoading />;
   }
 
   if (!data) return null;

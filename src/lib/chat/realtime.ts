@@ -1,5 +1,8 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { createClient } from "redis";
+import { teamChatRedisChannel } from "../redis-namespace";
+
+export { teamChatRedisChannel } from "../redis-namespace";
 
 type SocketTokenPayload = {
   tripId: string;
@@ -31,7 +34,6 @@ const base64url = (value: string) => Buffer.from(value).toString("base64url");
 const sign = (value: string) =>
   createHmac("sha256", getSocketSecret()).update(value).digest("base64url");
 
-export const teamChatRedisChannel = (tripId: string) => `trip:${tripId}:chat`;
 export const teamChatSocketRoom = (tripId: string) => `trip:${tripId}:team`;
 
 export async function publishTeamChatEvent(payload: {
