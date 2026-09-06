@@ -6,7 +6,7 @@
 
 **Tech stack:** Next.js 16, React 19, Node, Socket.IO, Better Auth with Google OAuth, Drizzle, PostgreSQL 18 with PostGIS and pgvector, and shared Redis.
 
-**Status:** Implementation authorized and prepared on `codex/production-rollout`. Production app remains stopped pending administrator PostGIS enablement, migrations, domain, and Google OAuth configuration.
+**Status:** Implementation authorized and prepared on `codex/production-rollout`. Production migrations are complete. The app remains stopped pending domain and Google OAuth configuration.
 
 ## Agreed scope and remaining decision
 
@@ -51,11 +51,11 @@ Better Auth environment configuration: https://better-auth.com/docs/installation
 
 - [x] Inspect only the production `plantain` database: schemas, tables, installed extensions, migration history, owners, and approximate data volume. Record whether it already contains application data.
 - [x] Rehearse all committed migrations on an empty disposable PostgreSQL 18 database. Confirm the later auth/schema migrations also work when applied to a fresh installation.
-- [ ] Establish a dedicated Plantain login with privileges scoped to its database. Install `postgis` and `vector` administratively if absent; application runtime must not use the shared PostgreSQL superuser.
-- [ ] Migrate the existing `plantain` database only if inspection confirms it is empty and suitable. Otherwise create a new empty Plantain database with its own role, retain the old database, and point the application to the new one. Do not import local data.
-- [ ] Before applying production migrations, verify a recent successful backup under the user's accepted approximate 20–30 minute tolerance. The earlier infrastructure backup is not assumed to remain recent at this later rollout.
-- [ ] Run `drizzle-kit migrate` once from the migration stage with the Plantain connection. Do not use `db push`, reset schemas, or run migrations automatically on every web-container startup.
-- [ ] Verify migration history, application tables, extension versions, and a spatial/vector query. Confirm existing unrelated services remain healthy.
+- [x] Establish a dedicated Plantain login with privileges scoped to its database. Install `postgis` and `vector` administratively if absent; application runtime must not use the shared PostgreSQL superuser.
+- [x] Migrate the existing `plantain` database only if inspection confirms it is empty and suitable. Otherwise create a new empty Plantain database with its own role, retain the old database, and point the application to the new one. Do not import local data.
+- [x] Before applying production migrations, verify a recent successful backup under the user's accepted approximate 20–30 minute tolerance. The earlier infrastructure backup is not assumed to remain recent at this later rollout.
+- [x] Run `drizzle-kit migrate` once from the migration stage with the Plantain connection. Do not use `db push`, reset schemas, or run migrations automatically on every web-container startup.
+- [x] Verify migration history, application tables, extension versions, and a spatial/vector query. Confirm existing unrelated services remain healthy.
 
 ## 4. Configure and deploy in Coolify
 
@@ -91,11 +91,11 @@ Better Auth environment configuration: https://better-auth.com/docs/installation
 
 - Coolify project/application created, no domain, auto-deployment disabled, runtime target/port/health configured. Application is stopped.
 - Configured runtime-only database and Redis URLs, production namespace, newly generated auth/socket secrets, and the Google AI/Outscraper keys approved for reuse. Google OAuth client configuration and canonical origin remain pending.
-- Existing `plantain_user` was verified as the database owner without superuser/createdb/createrole. Existing Drizzle history is empty; no public app tables exist. Vector 0.8.2 is installed; PostGIS needs an administrator to enable it.
+- Existing `plantain_user` was verified as the database owner without superuser/createdb/createrole. Existing Drizzle history is empty; no public app tables exist. Vector 0.8.2 and PostGIS 3.6.4 are enabled. All 11 migrations subsequently completed, with zero users/trips and successful spatial/vector checks.
 - Exact production PostgreSQL image and linux/amd64 application passed the disposable rehearsal: all 11 migrations, migration rerun, signed Better Auth session, unauthorized/unrelated trip rejection, spatial/vector queries, cache namespace isolation, two-client WebSocket delivery, and persistence after app restart.
 - Bun suite: 19 ordinary tests pass; four opt-in Redis tests pass when given a disposable Redis connection. Typecheck passes. The container rehearsal independently exercises cache and chat against Redis 8.6.1.
 - Security updates remain within existing framework/AI major versions. The complete lockfile has one moderate esbuild development-server advisory under Drizzle Kit and no critical/high findings. The web runtime excludes Drizzle Kit.
 - Added Suspense boundaries around URL-reading header/dashboard components to resolve production prerender failures.
-- Review caught and fixed credential-file exclusions in Docker context. No production migrations or app deployment performed.
+- Review caught and fixed credential-file exclusions in Docker context. Production migrations completed after a fresh Plantain-only backup; no application deployment performed.
 
 Remaining procedure is documented in `docs/production.md`. Reuse the existing database role; do not create a replacement or reset its password.

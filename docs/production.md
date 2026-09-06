@@ -30,7 +30,7 @@ The shared Redis URL uses hostname `ms4oks080ko48s4sog088wos`, port 6379, DB 0, 
 
 ## Production database preparation
 
-The saved production connection was verified on 2026-09-06: `plantain_user` already owns `plantain` and has no superuser, create-database, or create-role privileges. Reuse that role and password. The database has pgvector 0.8.2 and a Drizzle migration-history table, with no public application tables. PostGIS still needs installation by the PostgreSQL administrator.
+The saved production connection was verified on 2026-09-06: `plantain_user` already owns `plantain` and has no superuser, create-database, or create-role privileges. Reuse that role and password. PostGIS 3.6.4 was enabled by the administrator, and all 11 committed migrations were applied successfully on 2026-09-06. Verification confirmed zero users/trips and working spatial/vector queries. A Plantain-only backup was captured at 19:56 UTC before migration. The commands below document the procedure for future setup; they are not outstanding tasks for this database.
 
 Confirm a recent successful backup before production schema changes. On the resource server, enable the extension in Plantain only:
 
