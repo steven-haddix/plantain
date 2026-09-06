@@ -20,7 +20,7 @@ The rehearsal uses the exact shared PostgreSQL image digest, a disposable databa
 - Source: `steven-haddix/plantain`, existing `coolify-haddix` GitHub App.
 - Build pack: Dockerfile, location `/Dockerfile`, target `runtime`.
 - Resource server: `192.168.1.197`, network `coolify`.
-- Port 3000, HTTP health check `/api/health`, start period 30 seconds.
+- Port 3000. Turn off the dashboard-generated health check so Coolify detects the Dockerfile’s Node-based `/api/health` check (30-second start period). The slim image does not include curl or wget.
 - One replica; automatic deployment stays disabled until the first release is verified.
 - Domain is not yet selected. Do not launch with an invented OAuth origin.
 

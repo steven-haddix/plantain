@@ -6,11 +6,11 @@
 
 **Tech stack:** Next.js 16, React 19, Node, Socket.IO, Better Auth with Google OAuth, Drizzle, PostgreSQL 18 with PostGIS and pgvector, and shared Redis.
 
-**Status:** Implementation authorized and prepared on `codex/production-rollout`. Production migrations are complete. The app remains stopped pending domain and Google OAuth configuration.
+**Status:** Production migrations are complete. Plantain is running and healthy in Coolify at commit `0a355da1bbff68ef3ee5fef7bb8abbb976a92cdd`, deployment `dwitgwbtbh8jfts3wjibblr0`. The origin health endpoint returns 200. Cloudflare Tunnel routing still returns 502 and needs correction before public smoke testing.
 
 ## Agreed scope and remaining decision
 
-- No production domain has been chosen. Leave DNS as a launch step; packaging and migration rehearsal can proceed first. In this plan, `APP_ORIGIN` means the eventual canonical HTTPS origin; it is a planning variable, not a new application environment variable.
+- Production origin: `https://frnd.ing`, via the existing Cloudflare Tunnel. Steven confirmed the tunnel hostname and Google OAuth callback are configured.
 - Start with fresh application data; do not import local data. Inspect the existing production `plantain` database before migrating it. If it already contains data, use a new empty Plantain database and retain the existing one instead of wiping it.
 
 ## Observed starting point
@@ -61,10 +61,10 @@ Better Auth environment configuration: https://better-auth.com/docs/installation
 
 - [x] Create a Plantain project/production environment and one application linked through the existing GitHub App to `steven-haddix/plantain`, branch `main`.
 - [x] Use the repository Dockerfile on the existing resource server and network `coolify`. Build the application directly in Coolify; an additional application image registry is not required for this path.
-- [ ] Configure port 3000, `/api/health`, one replica, runtime environment variables, and the chosen HTTPS domain. Initially keep deployment manual.
+- [x] Configure port 3000, Dockerfile `/api/health` check, one replica, runtime environment variables, and `https://frnd.ing`. Deployment remains manual.
 - [ ] Set memory/CPU limits after checking available server headroom and measuring the production container; account for the Next.js build's separate resource demand.
 - [ ] Add DNS and TLS using the routing approach already used by the other apps. Verify the reverse proxy supports `/team-chat/socket` upgrades and streamed AI responses.
-- [ ] Deploy the reviewed commit after migrations pass. Record the commit and successful deployment identifier.
+- [x] Deploy after migrations pass. Commit `0a355da1bbff68ef3ee5fef7bb8abbb976a92cdd`, deployment `dwitgwbtbh8jfts3wjibblr0`, healthy on 2026-09-06. The app temporarily tracks `codex/production-dependency-layer` (PR #3); switch back to main after integration.
 
 ## 5. Verify the first release
 
