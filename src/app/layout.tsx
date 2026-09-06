@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { Suspense } from "react";
 import "leaflet/dist/leaflet.css";
 import "./globals.css";
 import { NavHeader } from "@/components/nav-header";
@@ -31,7 +32,9 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased bg-background text-foreground`}
       >
         <div className="flex min-h-screen flex-col">
-          <NavHeader />
+          <Suspense fallback={null}>
+            <NavHeader />
+          </Suspense>
           <main className="flex flex-1 flex-col">{children}</main>
         </div>
         <Toaster />
