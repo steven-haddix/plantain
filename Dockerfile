@@ -37,8 +37,10 @@ COPY src/db ./src/db
 USER node
 CMD ["node", "node_modules/drizzle-kit/bin.cjs", "migrate"]
 
-FROM dependencies AS production-dependencies
-RUN rm -rf node_modules && bun install --frozen-lockfile --production
+FROM base AS production-dependencies
+COPY --from=bun /usr/local/bin/bun /usr/local/bin/bun
+COPY package.json bun.lock ./
+RUN bun install --frozen-lockfile --production
 
 FROM base AS runtime
 ENV NODE_ENV=production HOSTNAME=0.0.0.0 PORT=3000
